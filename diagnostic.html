@@ -10,9 +10,9 @@ button{padding:10px 20px;margin:5px;font-size:16px;cursor:pointer;border:none;bo
 </style>
 </head>
 <body>
-<h2>🎙️ 音频播放诊断工具</h2>
-<p>在 HTTPS 环境下逐步测试音频播放的每个环节</p>
-<button onclick="runAll()">▶ 运行完整诊断</button>
+<h2>🎙️ 音频播放诊断 v2</h2>
+<p>测试 CORS 代理 + blob URL 方案</p>
+<button onclick="runAll()">▶ 运行诊断</button>
 <div id="log"></div>
 <script>
 const log = document.getElementById('log');
@@ -21,127 +21,79 @@ function add(msg, cls='') { log.innerHTML += `<span class="${cls}">${msg}</span>
 async function runAll() {
     log.textContent = '';
     const SONG_API = 'https://api.top237.top/ry-api';
-    
-    // Step 1: API connectivity
-    add('━━━ 步骤1: 测试 API 连接 ━━━');
-    try {
-        const r = await fetch(SONG_API + '/start/zanmei/sgbList');
-        const j = await r.json();
-        if (j.code === 200 && j.rows && j.rows.length > 0) {
-            add('  ✅ API 连接正常, 共 ' + j.rows.length + ' 首歌');
-        } else {
-            add('  ❌ API 返回异常: ' + JSON.stringify(j).substring(0, 200), 'fail');
-            return;
-        }
-    } catch(e) {
-        add('  ❌ API 连接失败: ' + e.message, 'fail');
-        return;
-    }
-    
-    // Step 2: Search a song
-    add('\n━━━ 步骤2: 搜索一首赞美歌曲 ━━━');
-    let song;
+    const CORS_PROXY = 'https://api.codetabs.com/v1/proxy?quest=';
+
+    // Step 1: Get audio URL from API
+    add('━━━ 步骤1: 获取音频 URL ━━━');
+    let adUrl, song;
     try {
         const list = (await (await fetch(SONG_API + '/start/zanmei/sgbList')).json()).rows;
-        const praise = list.filter(s => s.shiji_index === 0 && s.isad);
-        song = praise[0];
-        add('  ✅ 找到: ' + song.title + ' (id=' + song.id.substring(0,8) + '...)');
-    } catch(e) {
-        add('  ❌ 搜索失败: ' + e.message, 'fail');
-        return;
-    }
-    
-    // Step 3: Get audio URL
-    add('\n━━━ 步骤3: 获取音频 URL ━━━');
-    let adUrl;
-    try {
-        const r = await fetch(SONG_API + '/start/zanmei/searchByIdsLazyField?ids=' + song.id + '&fields=lyric,lrc,adUrl,gepuUrl');
-        const j = await r.json();
+        song = list.filter(s => s.shiji_index === 0 && s.isad)[0];
+        add('  歌曲: ' + song.title);
+        const j = await (await fetch(SONG_API + '/start/zanmei/searchByIdsLazyField?ids=' + song.id + '&fields=adUrl')).json();
         adUrl = j.data[0].adUrl;
-        if (adUrl) {
-            add('  ✅ 音频 URL: ' + adUrl);
-            // Ensure HTTPS
-            if (adUrl.startsWith('http://')) {
-                adUrl = adUrl.replace('http://', 'https://');
-                add('  ⚠️ URL 是 HTTP，已转 HTTPS', 'warn');
-            }
-        } else {
-            add('  ❌ 无音频 URL', 'fail');
-            return;
-        }
-    } catch(e) {
-        add('  ❌ 获取详情失败: ' + e.message, 'fail');
-        return;
-    }
-    
-    // Step 4: fetch audio (CORS test)
-    add('\n━━━ 步骤4: fetch 音频（CORS 测试） ━━━');
-    try {
-        const r = await fetch(adUrl);
-        add('  fetch status: ' + r.status + ', type: ' + r.headers.get('Content-Type'));
-        // Don't read full body, just first bytes
-        const reader = r.body.getReader();
-        const chunk = await reader.read();
-        add('  ✅ fetch 成功! 读到 ' + chunk.value.length + ' 字节');
-        reader.cancel();
-    } catch(e) {
-        add('  ❌ fetch 失败（预期中，oss.top237.top 无 CORS 头）: ' + e.message, 'warn');
-    }
-    
-    // Step 5: Audio element (no crossOrigin)
-    add('\n━━━ 步骤5: Audio 元素播放（无 crossOrigin）━━━');
+        add('  URL: ' + adUrl);
+    } catch(e) { add('  ❌ ' + e.message, 'fail'); return; }
+
+    // Step 2: Direct Audio (old method - may fail on iOS)
+    add('\n━━━ 步骤2: 直接 Audio URL（旧方法）━━━');
+    add('  Content-Type from oss.top237.top: application/octet-stream');
+    add('  iOS Safari 通常拒绝播放 octet-stream 类型');
     const audio1 = new Audio();
-    const result5 = await new Promise((resolve) => {
+    const r2 = await new Promise(resolve => {
         let done = false;
-        const timeout = setTimeout(() => {
-            if (!done) { done = true; resolve('⏰ 15秒超时 - 可能网络慢或被拦截'); }
-        }, 15000);
-        
-        audio1.addEventListener('canplaythrough', () => {
-            if (!done) { done = true; clearTimeout(timeout); resolve('✅ canplaythrough 触发! 音频可播放'); }
-        });
-        audio1.addEventListener('canplay', () => {
-            add('  canplay 事件触发', 'pass');
-        });
-        audio1.addEventListener('loadeddata', () => {
-            add('  loadeddata 事件触发, duration=' + audio1.duration.toFixed(1) + 's');
-        });
-        audio1.addEventListener('error', () => {
-            if (!done) {
-                done = true; clearTimeout(timeout);
-                const err = audio1.error;
-                resolve('❌ error 事件: code=' + (err ? err.code : '?') + ' msg=' + (err ? err.message : '?'));
-            }
-        });
-        audio1.addEventListener('stalled', () => add('  ⚠️ stalled 事件（加载停滞）', 'warn'));
+        const t = setTimeout(() => { if(!done){done=true; resolve('⏰ 10s超时');} }, 10000);
+        audio1.addEventListener('canplay', () => { if(!done){done=true;clearTimeout(t); resolve('✅ canplay');} });
+        audio1.addEventListener('error', () => { if(!done){done=true;clearTimeout(t); resolve('❌ error: code='+audio1.error?.code);} });
         audio1.src = adUrl;
-        add('  src 已设置: ' + adUrl.substring(0, 60) + '...');
     });
-    add('  结果: ' + result5, result5.startsWith('✅') ? 'pass' : 'fail');
-    
-    // Step 6: Try play()
-    add('\n━━━ 步骤6: 调用 play() ━━━');
+    add('  结果: ' + r2, r2.startsWith('✅') ? 'pass' : 'fail');
+    audio1.pause(); audio1.src = '';
+
+    // Step 3: CORS Proxy + blob (new method)
+    add('\n━━━ 步骤3: CORS代理下载 → blob URL（新方法）━━━');
     try {
-        audio1.volume = 0.3;
-        await audio1.play();
-        add('  ✅ play() 成功! 正在播放...');
-        setTimeout(() => { audio1.pause(); audio1.currentTime = 0; add('  (3秒后自动暂停)\n'); }, 3000);
+        add('  正在通过 codetabs.com 代理下载...');
+        const proxyUrl = CORS_PROXY + encodeURIComponent(adUrl);
+        add('  代理URL: ' + proxyUrl.substring(0, 70) + '...');
+        const resp = await fetch(proxyUrl);
+        add('  fetch status: ' + resp.status);
+        if (!resp.ok) throw new Error('proxy failed');
+        const blob = await resp.blob();
+        add('  blob size: ' + (blob.size / 1024 / 1024).toFixed(1) + ' MB, type: ' + blob.type);
+
+        const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+        const blobUrl = URL.createObjectURL(audioBlob);
+        add('  blob URL: ' + blobUrl.substring(0, 40) + '...');
+
+        // Step 4: Play blob URL
+        add('\n━━━ 步骤4: 播放 blob URL ━━━');
+        const audio2 = new Audio();
+        const r4 = await new Promise(resolve => {
+            let done = false;
+            const t = setTimeout(() => { if(!done){done=true; resolve('⏰ 10s超时');} }, 10000);
+            audio2.addEventListener('canplaythrough', () => { if(!done){done=true;clearTimeout(t); resolve('✅ 可播放! duration=' + audio2.duration.toFixed(1) + 's');} });
+            audio2.addEventListener('error', () => { if(!done){done=true;clearTimeout(t); resolve('❌ error: code='+audio2.error?.code);} });
+            audio2.src = blobUrl;
+        });
+        add('  结果: ' + r4, r4.startsWith('✅') ? 'pass' : 'fail');
+
+        // Try actual play
+        add('\n━━━ 步骤5: 实际播放测试 ━━━');
+        try {
+            audio2.volume = 0.3;
+            await audio2.play();
+            add('  ✅ 播放成功! 3秒后自动暂停');
+            setTimeout(() => { audio2.pause(); audio2.currentTime = 0; }, 3000);
+        } catch(e) {
+            add('  ❌ play() 失败: ' + e.message, 'fail');
+        }
+        URL.revokeObjectURL(blobUrl);
+
     } catch(e) {
-        add('  ❌ play() 失败: ' + e.name + ' - ' + e.message, 'fail');
+        add('  ❌ 代理下载失败: ' + e.message, 'fail');
     }
-    
-    // Step 7: Audio with <audio> tag in DOM
-    add('\n━━━ 步骤7: DOM <audio> 标签测试 ━━━');
-    const audioEl = document.createElement('audio');
-    audioEl.controls = true;
-    audioEl.src = adUrl;
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'margin-top:10px';
-    wrapper.textContent = '手动点击播放: ';
-    wrapper.appendChild(audioEl);
-    document.body.appendChild(wrapper);
-    add('  <audio controls> 已添加到页面下方，请手动点击播放按钮测试');
-    
+
     add('\n━━━ 诊断完成 ━━━', 'pass');
 }
 </script>
