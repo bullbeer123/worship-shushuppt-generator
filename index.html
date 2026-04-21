@@ -2080,9 +2080,10 @@ function updateAudioForSlide() {
             const btn = document.getElementById('audio-btn-play');
             btn.textContent = '⏳ 加载中...';
             btn.disabled = true;
-            // 直接用URL创建Audio元素（<audio>标签不受CORS限制）
-            const audio = new Audio(audioUrl);
-            audio.crossOrigin = null;
+            // 创建Audio元素，完全不设置crossOrigin属性（避免触发CORS检查）
+            const audio = new Audio();
+            // 注意：不设置audio.crossOrigin，也不设置audio.src = url（那样会立即开始加载）
+            // 先绑定事件，再设置src
             currentAudio = { key: s.audioKey, audio: audio, name: info.name };
             audio.addEventListener('timeupdate', () => {
                 document.getElementById('audio-time').textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration || 0);
@@ -2097,8 +2098,10 @@ function updateAudioForSlide() {
             audio.addEventListener('error', () => {
                 btn.disabled = false;
                 btn.textContent = '⚠️ 加载失败';
-                console.warn('音频播放失败:', audioUrl);
+                console.warn('音频播放失败:', audioUrl, audio.error ? audio.error.code + ' ' + audio.error.message : '');
             });
+            // 最后设置src（触发加载）
+            audio.src = audioUrl;
         }
     } else {
         bar.classList.remove('show');
