@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音频播放测试</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        .test h3 { margin-top: 0; }
+        .ok { color: green; font-weight: bold; }
+        .fail { color: red; font-weight: bold; }
+        #log { white-space: pre-wrap; background: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <h1>🔊 音频播放测试</h1>
+    <p>这个页面用于诊断音频播放问题。请依次点击各测试按钮。</p>
+
+    <div class="test">
+        <h3>测试1: new Audio() + audio.src (最简单)</h3>
+        <button onclick="test1()">开始测试1</button>
+        <span id="r1"></span>
+    </div>
+
+    <div class="test">
+        <h3>测试2: audio preload=auto</h3>
+        <button onclick="test2()">开始测试2</button>
+        <span id="r2"></span>
+    </div>
+
+    <div class="test">
+        <h3>测试3: audio + load() + play()</h3>
+        <button onclick="test3()">开始测试3</button>
+        <span id="r3"></span>
+    </div>
+
+    <div class="test">
+        <h3>测试4: HTML audio标签</h3>
+        <audio id="html-audio" controls src="https://oss.top237.top/assets/b3d4d7dbee01f0976fa646c4ec5ddffc.mp3"></audio>
+    </div>
+
+    <div class="test">
+        <h3>测试5: fetch下载后blob播放</h3>
+        <button onclick="test5()">开始测试5</button>
+        <span id="r5"></span>
+    </div>
+
+    <h3>📋 日志</h3>
+    <div id="log"></div>
+
+    <script>
+    const AUDIO_URL = 'https://oss.top237.top/assets/b3d4d7dbee01f0976fa646c4ec5ddffc.mp3';
+
+    function log(msg) {
+        document.getElementById('log').textContent += msg + '\n';
+        console.log(msg);
+    }
+
+    function test1() {
+        log('--- 测试1: new Audio() + src ---');
+        const a = new Audio();
+        document.getElementById('r1').textContent = '⏳ 加载中...';
+        a.addEventListener('loadeddata', () => {
+            document.getElementById('r1').innerHTML = '<span class="ok">✅ loadeddata</span>';
+            log('测试1 loadeddata OK');
+        });
+        a.addEventListener('canplay', () => {
+            log('测试1 canplay OK');
+        });
+        a.addEventListener('error', (e) => {
+            const code = a.error ? a.error.code : 'unknown';
+            const msg = a.error ? a.error.message : '';
+            document.getElementById('r1').innerHTML = '<span class="fail">❌ error ' + code + ': ' + msg + '</span>';
+            log('测试1 ERROR: code=' + code + ' msg=' + msg);
+        });
+        a.src = AUDIO_URL;
+        log('测试1: src set to ' + AUDIO_URL.substring(0, 50) + '...');
+    }
+
+    function test2() {
+        log('--- 测试2: new Audio() + preload=auto ---');
+        const a = new Audio();
+        document.getElementById('r2').textContent = '⏳ 加载中...';
+        a.preload = 'auto';
+        a.addEventListener('loadeddata', () => {
+            document.getElementById('r2').innerHTML = '<span class="ok">✅ loadeddata</span>';
+            log('测试2 loadeddata OK');
+        });
+        a.addEventListener('error', () => {
+            const code = a.error ? a.error.code : 'unknown';
+            const msg = a.error ? a.error.message : '';
+            document.getElementById('r2').innerHTML = '<span class="fail">❌ error ' + code + ': ' + msg + '</span>';
+            log('测试2 ERROR: code=' + code + ' msg=' + msg);
+        });
+        a.src = AUDIO_URL;
+        log('测试2: src set, preload=auto');
+    }
+
+    function test3() {
+        log('--- 测试3: new Audio() + load() + play() ---');
+        const a = new Audio();
+        document.getElementById('r3').textContent = '⏳ 加载中...';
+        a.addEventListener('loadeddata', () => {
+            document.getElementById('r3').innerHTML = '<span class="ok">✅ loadeddata, 尝试播放</span>';
+            log('测试3 loadeddata OK, trying to play...');
+            a.play().then(() => {
+                log('测试3 play() OK!');
+                document.getElementById('r3').innerHTML = '<span class="ok">✅ 正在播放!</span>';
+            }).catch(err => {
+                log('测试3 play() FAILED: ' + err.message);
+                document.getElementById('r3').innerHTML = '<span class="fail">❌ play失败: ' + err.message + '</span>';
+            });
+        });
+        a.addEventListener('error', () => {
+            const code = a.error ? a.error.code : 'unknown';
+            const msg = a.error ? a.error.message : '';
+            document.getElementById('r3').innerHTML = '<span class="fail">❌ error ' + code + ': ' + msg + '</span>';
+            log('测试3 ERROR: code=' + code + ' msg=' + msg);
+        });
+        a.src = AUDIO_URL;
+        a.load();
+        log('测试3: src set + load()');
+    }
+
+    async function test5() {
+        log('--- 测试5: fetch → blob → Audio ---');
+        document.getElementById('r5').textContent = '⏳ 下载中...';
+        try {
+            const resp = await fetch(AUDIO_URL);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const blob = await resp.blob();
+            log('下载完成: ' + blob.size + ' bytes, type=' + blob.type);
+            const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+            const url = URL.createObjectURL(audioBlob);
+            const a = new Audio();
+            a.addEventListener('loadeddata', () => {
+                document.getElementById('r5').innerHTML = '<span class="ok">✅ 下载并加载成功! ' + blob.size + ' bytes</span>';
+                log('测试5 loadeddata OK');
+            });
+            a.addEventListener('error', () => {
+                document.getElementById('r5').innerHTML = '<span class="fail">❌ blob音频加载失败</span>';
+                log('测试5 ERROR loading blob');
+            });
+            a.src = url;
+        } catch (e) {
+            document.getElementById('r5').innerHTML = '<span class="fail">❌ fetch失败: ' + e.message + '</span>';
+            log('测试5 FETCH ERROR: ' + e.message);
+        }
+    }
+    </script>
+</body>
+</html>
