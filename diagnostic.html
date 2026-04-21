@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>音频诊断</title>
+<style>
+body{font-family:monospace;padding:20px;max-width:600px;margin:0 auto}
+button{padding:10px 20px;margin:5px;font-size:16px;cursor:pointer;border:none;border-radius:8px;background:#5B1A6E;color:white}
+#log{white-space:pre-wrap;background:#111;color:#0f0;padding:15px;border-radius:8px;max-height:60vh;overflow-y:auto;margin-top:15px;font-size:14px}
+.pass{color:#0f0}.fail{color:#f44}.warn{color:#fa0}
+</style>
+</head>
+<body>
+<h2>🎙️ 音频播放诊断工具</h2>
+<p>在 HTTPS 环境下逐步测试音频播放的每个环节</p>
+<button onclick="runAll()">▶ 运行完整诊断</button>
+<div id="log"></div>
+<script>
+const log = document.getElementById('log');
+function add(msg, cls='') { log.innerHTML += `<span class="${cls}">${msg}</span>\n`; log.scrollTop = log.scrollHeight; }
+
+async function runAll() {
+    log.textContent = '';
+    const SONG_API = 'https://api.top237.top/ry-api';
+    
+    // Step 1: API connectivity
+    add('━━━ 步骤1: 测试 API 连接 ━━━');
+    try {
+        const r = await fetch(SONG_API + '/start/zanmei/sgbList');
+        const j = await r.json();
+        if (j.code === 200 && j.rows && j.rows.length > 0) {
+            add('  ✅ API 连接正常, 共 ' + j.rows.length + ' 首歌');
+        } else {
+            add('  ❌ API 返回异常: ' + JSON.stringify(j).substring(0, 200), 'fail');
+            return;
+        }
+    } catch(e) {
+        add('  ❌ API 连接失败: ' + e.message, 'fail');
+        return;
+    }
+    
+    // Step 2: Search a song
+    add('\n━━━ 步骤2: 搜索一首赞美歌曲 ━━━');
+    let song;
+    try {
+        const list = (await (await fetch(SONG_API + '/start/zanmei/sgbList')).json()).rows;
+        const praise = list.filter(s => s.shiji_index === 0 && s.isad);
+        song = praise[0];
+        add('  ✅ 找到: ' + song.title + ' (id=' + song.id.substring(0,8) + '...)');
+    } catch(e) {
+        add('  ❌ 搜索失败: ' + e.message, 'fail');
+        return;
+    }
+    
+    // Step 3: Get audio URL
+    add('\n━━━ 步骤3: 获取音频 URL ━━━');
+    let adUrl;
+    try {
+        const r = await fetch(SONG_API + '/start/zanmei/searchByIdsLazyField?ids=' + song.id + '&fields=lyric,lrc,adUrl,gepuUrl');
+        const j = await r.json();
+        adUrl = j.data[0].adUrl;
+        if (adUrl) {
+            add('  ✅ 音频 URL: ' + adUrl);
+            // Ensure HTTPS
+            if (adUrl.startsWith('http://')) {
+                adUrl = adUrl.replace('http://', 'https://');
+                add('  ⚠️ URL 是 HTTP，已转 HTTPS', 'warn');
+            }
+        } else {
+            add('  ❌ 无音频 URL', 'fail');
+            return;
+        }
+    } catch(e) {
+        add('  ❌ 获取详情失败: ' + e.message, 'fail');
+        return;
+    }
+    
+    // Step 4: fetch audio (CORS test)
+    add('\n━━━ 步骤4: fetch 音频（CORS 测试） ━━━');
+    try {
+        const r = await fetch(adUrl);
+        add('  fetch status: ' + r.status + ', type: ' + r.headers.get('Content-Type'));
+        // Don't read full body, just first bytes
+        const reader = r.body.getReader();
+        const chunk = await reader.read();
+        add('  ✅ fetch 成功! 读到 ' + chunk.value.length + ' 字节');
+        reader.cancel();
+    } catch(e) {
+        add('  ❌ fetch 失败（预期中，oss.top237.top 无 CORS 头）: ' + e.message, 'warn');
+    }
+    
+    // Step 5: Audio element (no crossOrigin)
+    add('\n━━━ 步骤5: Audio 元素播放（无 crossOrigin）━━━');
+    const audio1 = new Audio();
+    const result5 = await new Promise((resolve) => {
+        let done = false;
+        const timeout = setTimeout(() => {
+            if (!done) { done = true; resolve('⏰ 15秒超时 - 可能网络慢或被拦截'); }
+        }, 15000);
+        
+        audio1.addEventListener('canplaythrough', () => {
+            if (!done) { done = true; clearTimeout(timeout); resolve('✅ canplaythrough 触发! 音频可播放'); }
+        });
+        audio1.addEventListener('canplay', () => {
+            add('  canplay 事件触发', 'pass');
+        });
+        audio1.addEventListener('loadeddata', () => {
+            add('  loadeddata 事件触发, duration=' + audio1.duration.toFixed(1) + 's');
+        });
+        audio1.addEventListener('error', () => {
+            if (!done) {
+                done = true; clearTimeout(timeout);
+                const err = audio1.error;
+                resolve('❌ error 事件: code=' + (err ? err.code : '?') + ' msg=' + (err ? err.message : '?'));
+            }
+        });
+        audio1.addEventListener('stalled', () => add('  ⚠️ stalled 事件（加载停滞）', 'warn'));
+        audio1.src = adUrl;
+        add('  src 已设置: ' + adUrl.substring(0, 60) + '...');
+    });
+    add('  结果: ' + result5, result5.startsWith('✅') ? 'pass' : 'fail');
+    
+    // Step 6: Try play()
+    add('\n━━━ 步骤6: 调用 play() ━━━');
+    try {
+        audio1.volume = 0.3;
+        await audio1.play();
+        add('  ✅ play() 成功! 正在播放...');
+        setTimeout(() => { audio1.pause(); audio1.currentTime = 0; add('  (3秒后自动暂停)\n'); }, 3000);
+    } catch(e) {
+        add('  ❌ play() 失败: ' + e.name + ' - ' + e.message, 'fail');
+    }
+    
+    // Step 7: Audio with <audio> tag in DOM
+    add('\n━━━ 步骤7: DOM <audio> 标签测试 ━━━');
+    const audioEl = document.createElement('audio');
+    audioEl.controls = true;
+    audioEl.src = adUrl;
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'margin-top:10px';
+    wrapper.textContent = '手动点击播放: ';
+    wrapper.appendChild(audioEl);
+    document.body.appendChild(wrapper);
+    add('  <audio controls> 已添加到页面下方，请手动点击播放按钮测试');
+    
+    add('\n━━━ 诊断完成 ━━━', 'pass');
+}
+</script>
+</body>
+</html>
