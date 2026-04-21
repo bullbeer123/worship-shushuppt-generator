@@ -981,11 +981,32 @@
 // ============ Audio Management ============
 const audioFiles = {};  // { praise1: { url, name }, praise2: ..., hymn1: ..., hymn2: ... }
 let currentAudio = null; // { key, audioElement }
+const CORS_PROXY = 'https://api.codetabs.com/v1/proxy?quest=';
 
 // 强制将URL升级为https（解决HTTPS页面加载HTTP资源的mixed content问题）
 function ensureHttps(url) {
     if (!url) return url;
     return url.replace(/^http:\/\//i, 'https://');
+}
+
+// 通过CORS代理下载远程音频为blob URL（解决iOS Safari不支持octet-stream类型播放的问题）
+// 如果代理失败则返回原始URL作为fallback
+async function fetchAudioBlob(remoteUrl) {
+    if (!remoteUrl) return remoteUrl;
+    try {
+        const proxyUrl = CORS_PROXY + encodeURIComponent(remoteUrl);
+        const resp = await fetch(proxyUrl);
+        if (!resp.ok) throw new Error('proxy status ' + resp.status);
+        const blob = await resp.blob();
+        // 确保blob有正确的音频MIME type
+        const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+        const blobUrl = URL.createObjectURL(audioBlob);
+        console.log('音频下载成功:', remoteUrl.substring(0, 50) + '...', blob.size, 'bytes');
+        return blobUrl;
+    } catch (e) {
+        console.warn('CORS代理下载音频失败，使用原始URL:', e.message);
+        return remoteUrl;
+    }
 }
 // 预加载远程图片（仅用于非base64的图片URL）
 // base64内嵌的图片不需要预加载，CSS直接设置即可显示
@@ -2064,7 +2085,7 @@ function closeSlideshow() {
 }
 
 // ============ Audio Playback in Slideshow ============
-function updateAudioForSlide() {
+async function updateAudioForSlide() {
     const s = slides[currentSlide];
     const bar = document.getElementById('slide-audio-bar');
 
@@ -2078,13 +2099,15 @@ function updateAudioForSlide() {
             stopAudio();
             const audioUrl = info.url;
             const btn = document.getElementById('audio-btn-play');
-            btn.textContent = '⏳ 加载中...';
+            btn.textContent = '⏳ 下载中...';
             btn.disabled = true;
-            // 创建Audio元素，完全不设置crossOrigin属性（避免触发CORS检查）
+
+            // 通过CORS代理预下载音频为blob URL（解决跨域和iOS兼容问题）
+            const blobUrl = await fetchAudioBlob(audioUrl);
+
+            if (!currentAudio || currentAudio.key !== s.audioKey) return; // 用户已切换幻灯片
             const audio = new Audio();
-            // 注意：不设置audio.crossOrigin，也不设置audio.src = url（那样会立即开始加载）
-            // 先绑定事件，再设置src
-            currentAudio = { key: s.audioKey, audio: audio, name: info.name };
+            currentAudio = { key: s.audioKey, audio: audio, name: info.name, blobUrl: blobUrl };
             audio.addEventListener('timeupdate', () => {
                 document.getElementById('audio-time').textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration || 0);
             });
@@ -2097,11 +2120,10 @@ function updateAudioForSlide() {
             });
             audio.addEventListener('error', () => {
                 btn.disabled = false;
-                btn.textContent = '⚠️ 加载失败';
-                console.warn('音频播放失败:', audioUrl, audio.error ? audio.error.code + ' ' + audio.error.message : '');
+                btn.textContent = '⚠️ 播放失败';
+                console.warn('音频播放失败:', blobUrl, audio.error ? audio.error.code + ' ' + audio.error.message : '');
             });
-            // 最后设置src（触发加载）
-            audio.src = audioUrl;
+            audio.src = blobUrl;
         }
     } else {
         bar.classList.remove('show');
@@ -2128,6 +2150,10 @@ function stopAudio() {
     if (currentAudio) {
         currentAudio.audio.pause();
         currentAudio.audio.currentTime = 0;
+        // 释放blob URL内存
+        if (currentAudio.blobUrl && currentAudio.blobUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(currentAudio.blobUrl);
+        }
         currentAudio = null;
     }
     document.getElementById('audio-btn-play').textContent = '▶ 播放';
