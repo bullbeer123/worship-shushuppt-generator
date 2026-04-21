@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -2238,7 +2239,7 @@ function restoreLastRecord() {
         let restoredAudioCount = 0;
         for (const [key, info] of Object.entries(audioInfo)) {
             if (info && info.url) {
-                audioFiles[key] = { url: info.url, name: info.name, isRemote: true };
+                audioFiles[key] = { url: ensureHttps(info.url), name: info.name, isRemote: true };
                 const nameEl = document.getElementById('audio-' + key + '-name');
                 if (nameEl) nameEl.textContent = '🎵 ' + info.name + '（已恢复）';
                 restoredAudioCount++;
