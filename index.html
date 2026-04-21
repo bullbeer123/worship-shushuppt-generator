@@ -988,6 +988,63 @@ function ensureHttps(url) {
     return url.replace(/^http:\/\//i, 'https://');
 }
 
+// CORS代理：oss.top237.top 没有配置CORS头，从HTTPS网站无法直接加载
+// 通过免费代理绕过跨域限制
+const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+function corsProxy(url) {
+    if (!url) return url;
+    // 只对 oss.top237.top 的资源使用代理（该CDN没有CORS头）
+    if (url.includes('oss.top237.top')) {
+        return CORS_PROXY + encodeURIComponent(url);
+    }
+    return url;
+}
+
+// 通过CORS代理获取音频的blob URL（解决跨域音频无法播放的问题）
+async function fetchAudioBlob(url) {
+    try {
+        // 先尝试直接加载（本地使用或CDN已修复CORS时更快）
+        const resp = await fetch(url, { mode: 'cors' });
+        if (resp.ok) {
+            const blob = await resp.blob();
+            return URL.createObjectURL(blob);
+        }
+    } catch (e) {
+        // 直连失败，走CORS代理
+    }
+    try {
+        const proxyUrl = corsProxy(url);
+        const resp = await fetch(proxyUrl);
+        if (resp.ok) {
+            const blob = await resp.blob();
+            return URL.createObjectURL(blob);
+        }
+    } catch (e) {
+        console.warn('音频加载失败（代理也失败）:', url, e);
+    }
+    return url; // 都失败了，返回原始URL让浏览器尝试
+}
+
+// 预加载远程图片，失败时通过CORS代理重试
+function preloadImage(url) {
+    const img = new Image();
+    img.onload = () => { /* 图片加载成功 */ };
+    img.onerror = () => {
+        // 直连失败，尝试通过CORS代理加载并用blob替换背景
+        if (url.includes('oss.top237.top')) {
+            fetch(corsProxy(url))
+                .then(r => r.blob())
+                .then(blob => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    const page = document.getElementById('slide-page');
+                    page.style.backgroundImage = "url('" + blobUrl + "')";
+                })
+                .catch(e => console.warn('图片代理加载也失败:', url, e));
+        }
+    };
+    img.src = url;
+}
+
 function pickAudio(key) {
     document.getElementById('audio-' + key).click();
 }
@@ -1930,9 +1987,12 @@ function renderSlide() {
             if (d.declaration) {
                 html = '<div class="s-footer" style="text-shadow:0 1px 6px rgba(0,0,0,0.8);">' + esc(d.declaration).replace(/\n/g, '<br>') + '</div>';
             }
-            page.style.backgroundImage = "url('" + (coverImgUrl || ensureHttps(DEFAULT_COVER_BG)) + "')";
+            const bgUrl = coverImgUrl || ensureHttps(DEFAULT_COVER_BG);
+            page.style.backgroundImage = "url('" + bgUrl + "')";
             page.style.backgroundSize = 'cover';
             page.style.backgroundPosition = 'center';
+            // 预加载图片确保显示
+            preloadImage(bgUrl);
             break;
         }
         case 'stand-up-fixed':
@@ -1970,9 +2030,11 @@ function renderSlide() {
             break;
         case 'ending':
             html = `<div class="s-title" style="font-size:calc(clamp(36px,6vw,72px) * var(--fs-scale));text-shadow:0 2px 8px rgba(0,0,0,0.6);">以马内利</div>`;
-            page.style.backgroundImage = "url('" + (endingImgUrl || ensureHttps(DEFAULT_ENDING_BG)) + "')";
+            const endBgUrl = endingImgUrl || ensureHttps(DEFAULT_ENDING_BG);
+            page.style.backgroundImage = "url('" + endBgUrl + "')";
             page.style.backgroundSize = 'cover';
             page.style.backgroundPosition = 'center';
+            preloadImage(endBgUrl);
             break;
     }
 
@@ -2053,13 +2115,33 @@ function updateAudioForSlide() {
         // If this is a different audio key, switch to it
         if (!currentAudio || currentAudio.key !== s.audioKey) {
             stopAudio();
-            const audio = new Audio(info.url);
-            currentAudio = { key: s.audioKey, audio: audio, name: info.name };
-            audio.addEventListener('timeupdate', () => {
-                document.getElementById('audio-time').textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration || 0);
-            });
-            audio.addEventListener('ended', () => {
-                document.getElementById('audio-btn-play').textContent = '▶ 播放';
+            const audioUrl = info.url;
+            const btn = document.getElementById('audio-btn-play');
+            btn.textContent = '⏳ 加载中...';
+            btn.disabled = true;
+            // 通过CORS代理获取音频blob URL，解决跨域播放问题
+            fetchAudioBlob(audioUrl).then(blobUrl => {
+                const audio = new Audio(blobUrl);
+                currentAudio = { key: s.audioKey, audio: audio, name: info.name };
+                audio.addEventListener('timeupdate', () => {
+                    document.getElementById('audio-time').textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration || 0);
+                });
+                audio.addEventListener('ended', () => {
+                    document.getElementById('audio-btn-play').textContent = '▶ 播放';
+                });
+                audio.addEventListener('canplay', () => {
+                    btn.disabled = false;
+                    btn.textContent = '▶ 播放';
+                });
+                audio.addEventListener('error', () => {
+                    btn.disabled = false;
+                    btn.textContent = '⚠️ 加载失败';
+                    console.warn('音频播放失败:', audioUrl);
+                });
+            }).catch(err => {
+                btn.disabled = false;
+                btn.textContent = '⚠️ 加载失败';
+                console.warn('音频获取失败:', audioUrl, err);
             });
         }
     } else {
