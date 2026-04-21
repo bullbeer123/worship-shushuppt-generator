@@ -986,6 +986,55 @@ function ensureHttps(url) {
     if (!url) return url;
     return url.replace(/^http:\/\//i, 'https://');
 }
+
+// CORS代理备选方案：当直接URL播放失败时调用
+// 使用多个代理，只请求前64KB检测可用性，再完整下载
+async function tryCorsProxyFallback(originalUrl) {
+    if (!currentAudio || !currentAudio.audio) return;
+
+    const proxies = [
+        'https://api.codetabs.com/v1/proxy?quest=',
+        'https://corsproxy.io/?',
+    ];
+
+    for (const prefix of proxies) {
+        try {
+            const proxyUrl = prefix + encodeURIComponent(originalUrl);
+            // 先用HEAD请求测试代理是否可用（快速）
+            const headResp = await fetch(proxyUrl, { method: 'HEAD' });
+            if (!headResp.ok) continue;
+
+            // 代理可用，开始下载
+            document.getElementById('audio-btn-play').textContent = '⏳ 下载音频...';
+            const resp = await fetch(proxyUrl);
+            if (!resp.ok) continue;
+
+            const blob = await resp.blob();
+            if (blob.size < 1000) continue; // 太小说明不是有效音频
+
+            const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+            const blobUrl = URL.createObjectURL(audioBlob);
+
+            // 检查用户是否已切换到其他幻灯片
+            if (!currentAudio || currentAudio.audio.src !== originalUrl) {
+                URL.revokeObjectURL(blobUrl);
+                return;
+            }
+
+            currentAudio.audio.src = blobUrl;
+            currentAudio.blobUrl = blobUrl;
+            currentAudio.audio.load();
+            return; // 成功
+        } catch (e) {
+            console.warn('代理', prefix, '失败:', e.message);
+        }
+    }
+
+    // 所有方案都失败
+    if (currentAudio) {
+        document.getElementById('audio-btn-play').textContent = '⚠️ 播放失败';
+    }
+}
 // 预加载远程图片（仅用于非base64的图片URL）
 // base64内嵌的图片不需要预加载，CSS直接设置即可显示
 function preloadImage(url) {
@@ -2078,6 +2127,10 @@ async function updateAudioForSlide() {
             const audioUrl = ensureHttps(info.url);
             const audio = new Audio();
             currentAudio = { key: s.audioKey, audio: audio, name: info.name };
+
+            // 设置音频类型提示（某些浏览器根据此决定是否播放）
+            audio.type = 'audio/mpeg';
+
             audio.addEventListener('timeupdate', () => {
                 document.getElementById('audio-time').textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration || 0);
             });
@@ -2088,11 +2141,13 @@ async function updateAudioForSlide() {
                 document.getElementById('audio-btn-play').textContent = '▶ 播放';
             });
             audio.addEventListener('error', () => {
-                document.getElementById('audio-btn-play').textContent = '⚠️ 播放失败';
-                console.warn('音频播放失败:', audioUrl, audio.error ? audio.error.code + ' ' + audio.error.message : '');
+                // 直接URL失败时，尝试通过CORS代理流式下载
+                document.getElementById('audio-btn-play').textContent = '⏳ 重试中...';
+                tryCorsProxyFallback(audioUrl);
             });
-            audio.preload = 'auto';
+            audio.preload = 'metadata';
             audio.src = audioUrl;
+            audio.load();
         }
     } else {
         bar.classList.remove('show');
@@ -2120,6 +2175,9 @@ function stopAudio() {
         currentAudio.audio.pause();
         currentAudio.audio.currentTime = 0;
         currentAudio.audio.src = '';
+        if (currentAudio.blobUrl && currentAudio.blobUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(currentAudio.blobUrl);
+        }
         currentAudio = null;
     }
     document.getElementById('audio-btn-play').textContent = '▶ 播放';
