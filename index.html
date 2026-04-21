@@ -982,6 +982,12 @@
 const audioFiles = {};  // { praise1: { url, name }, praise2: ..., hymn1: ..., hymn2: ... }
 let currentAudio = null; // { key, audioElement }
 
+// 强制将URL升级为https（解决HTTPS页面加载HTTP资源的mixed content问题）
+function ensureHttps(url) {
+    if (!url) return url;
+    return url.replace(/^http:\/\//i, 'https://');
+}
+
 function pickAudio(key) {
     document.getElementById('audio-' + key).click();
 }
@@ -1587,7 +1593,7 @@ async function fetchLyrics(type) {
             if (audioFiles[type] && audioFiles[type].isBlob) {
                 URL.revokeObjectURL(audioFiles[type].url);
             }
-            audioFiles[type] = { url: audioUrl, name: song.title + '.mp3', isRemote: true };
+            audioFiles[type] = { url: ensureHttps(audioUrl), name: song.title + '.mp3', isRemote: true };
             document.getElementById('audio-' + type + '-name').textContent = '🎵 ' + song.title + '（自动加载）';
         }
 
@@ -1669,7 +1675,7 @@ async function fetchLyricsSilent(type) {
         // 加载音频
         if (audioUrl) {
             if (audioFiles[type] && audioFiles[type].isBlob) URL.revokeObjectURL(audioFiles[type].url);
-            audioFiles[type] = { url: audioUrl, name: song.title + '.mp3', isRemote: true };
+            audioFiles[type] = { url: ensureHttps(audioUrl), name: song.title + '.mp3', isRemote: true };
             document.getElementById('audio-' + type + '-name').textContent = '🎵 ' + song.title + '（自动加载）';
         }
 
@@ -1877,7 +1883,7 @@ async function loadFixedSongAudioById(audioKey, songId, displayName) {
         const resp = await fetch(SONG_API + '/start/zanmei/searchByIdsLazyField?ids=' + songId + '&fields=adUrl');
         const json = await resp.json();
         if (json.code === 200 && json.data && json.data.length > 0 && json.data[0].adUrl) {
-            audioFiles[audioKey] = { url: json.data[0].adUrl, name: displayName + '.mp3', isRemote: true };
+            audioFiles[audioKey] = { url: ensureHttps(json.data[0].adUrl), name: displayName + '.mp3', isRemote: true };
         }
     } catch (e) {
         console.warn('Failed to load audio for ' + displayName, e);
@@ -1924,7 +1930,7 @@ function renderSlide() {
             if (d.declaration) {
                 html = '<div class="s-footer" style="text-shadow:0 1px 6px rgba(0,0,0,0.8);">' + esc(d.declaration).replace(/\n/g, '<br>') + '</div>';
             }
-            page.style.backgroundImage = "url('" + (coverImgUrl || DEFAULT_COVER_BG) + "')";
+            page.style.backgroundImage = "url('" + (coverImgUrl || ensureHttps(DEFAULT_COVER_BG)) + "')";
             page.style.backgroundSize = 'cover';
             page.style.backgroundPosition = 'center';
             break;
@@ -1964,7 +1970,7 @@ function renderSlide() {
             break;
         case 'ending':
             html = `<div class="s-title" style="font-size:calc(clamp(36px,6vw,72px) * var(--fs-scale));text-shadow:0 2px 8px rgba(0,0,0,0.6);">以马内利</div>`;
-            page.style.backgroundImage = "url('" + (endingImgUrl || DEFAULT_ENDING_BG) + "')";
+            page.style.backgroundImage = "url('" + (endingImgUrl || ensureHttps(DEFAULT_ENDING_BG)) + "')";
             page.style.backgroundSize = 'cover';
             page.style.backgroundPosition = 'center';
             break;
@@ -2364,7 +2370,7 @@ async function generatePPT() {
                     break;
                 }
                 case 'date-title': {
-                    const bgSrc = pptCoverImg || 'https://oss.top237.top/2025/10/21/68f73952a3c1b.jpg';
+                    const bgSrc = pptCoverImg || ensureHttps('https://oss.top237.top/2025/10/21/68f73952a3c1b.jpg');
                     slide.background = { path: bgSrc };
                     break;
                 }
@@ -2406,7 +2412,7 @@ async function generatePPT() {
                     if (s.data.forum) slide.addText(s.data.forum, { x: 1, y: 2.0, w: 11.333, h: 4.5, fontSize: 24, color: W, align: 'center', valign: 'middle', fontFace: 'Microsoft YaHei', lineSpacing: 38 });
                     break;
                 case 'ending': {
-                    slide.background = { path: pptEndingImg || 'https://oss.top237.top/2026/02/13/698f201f1dcea.png' };
+                    slide.background = { path: pptEndingImg || ensureHttps('https://oss.top237.top/2026/02/13/698f201f1dcea.png') };
                     slide.addText('以马内利', { x: 0, y: 0, w: 13.333, h: 7.5, fontSize: 60, color: W, align: 'center', valign: 'middle', bold: true, fontFace: 'Microsoft YaHei', shadow: { type: 'outer', color: '000000', blur: 8, offset: 2, angle: 45, opacity: 0.5 } });
                     break;
                 }
