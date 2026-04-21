@@ -988,58 +988,81 @@ function ensureHttps(url) {
     return url.replace(/^http:\/\//i, 'https://');
 }
 
-// CORS代理：oss.top237.top 没有配置CORS头，从HTTPS网站无法直接加载
-// 通过免费代理绕过跨域限制
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
-function corsProxy(url) {
-    if (!url) return url;
-    // 只对 oss.top237.top 的资源使用代理（该CDN没有CORS头）
-    if (url.includes('oss.top237.top')) {
-        return CORS_PROXY + encodeURIComponent(url);
+// ========== CORS代理方案 ==========
+// oss.top237.top 没有配置CORS头，从HTTPS网站无法通过fetch加载
+// 图片（CSS background-image）本身不受CORS限制，但某些网络环境可能屏蔽
+// 音频需要通过JS加载（Audio对象），受CORS限制，必须走代理
+const PROXY_LIST = [
+    url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
+    url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+];
+
+// 带超时的fetch
+async function fetchWithTimeout(url, timeout = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+        const resp = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        return resp;
+    } catch (e) {
+        clearTimeout(timer);
+        throw e;
     }
-    return url;
 }
 
-// 通过CORS代理获取音频的blob URL（解决跨域音频无法播放的问题）
+// 获取blob URL：先直连，再逐个尝试代理
+async function fetchBlobWithProxy(url, timeout = 8000) {
+    // 1) 先尝试直接加载
+    try {
+        const resp = await fetchWithTimeout(url, timeout);
+        if (resp.ok) {
+            const blob = await resp.blob();
+            return URL.createObjectURL(blob);
+        }
+    } catch (e) { /* 直连失败 */ }
+
+    // 2) 逐个尝试代理
+    for (const proxyFn of PROXY_LIST) {
+        try {
+            const proxyUrl = proxyFn(url);
+            const resp = await fetchWithTimeout(proxyUrl, timeout + 4000);
+            if (resp.ok) {
+                const blob = await resp.blob();
+                return URL.createObjectURL(blob);
+            }
+        } catch (e) { /* 该代理失败，试下一个 */ }
+    }
+
+    return null; // 全部失败
+}
+
+// 通过多代理回退获取音频的blob URL
 async function fetchAudioBlob(url) {
-    try {
-        // 先尝试直接加载（本地使用或CDN已修复CORS时更快）
-        const resp = await fetch(url, { mode: 'cors' });
-        if (resp.ok) {
-            const blob = await resp.blob();
-            return URL.createObjectURL(blob);
-        }
-    } catch (e) {
-        // 直连失败，走CORS代理
-    }
-    try {
-        const proxyUrl = corsProxy(url);
-        const resp = await fetch(proxyUrl);
-        if (resp.ok) {
-            const blob = await resp.blob();
-            return URL.createObjectURL(blob);
-        }
-    } catch (e) {
-        console.warn('音频加载失败（代理也失败）:', url, e);
-    }
-    return url; // 都失败了，返回原始URL让浏览器尝试
+    const blobUrl = await fetchBlobWithProxy(url, 10000);
+    if (blobUrl) return blobUrl;
+    console.warn('音频加载失败（所有代理均失败）:', url);
+    return url; // 最后回退到原始URL
 }
 
-// 预加载远程图片，失败时通过CORS代理重试
+// 预加载远程图片并确保显示
+// 图片在CSS中设置background-image，理论上不受CORS限制
+// 但某些网络可能屏蔽oss.top237.top，所以这里主动检测并用代理兜底
 function preloadImage(url) {
+    if (!url) return;
     const img = new Image();
-    img.onload = () => { /* 图片加载成功 */ };
-    img.onerror = () => {
-        // 直连失败，尝试通过CORS代理加载并用blob替换背景
-        if (url.includes('oss.top237.top')) {
-            fetch(corsProxy(url))
-                .then(r => r.blob())
-                .then(blob => {
-                    const blobUrl = URL.createObjectURL(blob);
-                    const page = document.getElementById('slide-page');
-                    page.style.backgroundImage = "url('" + blobUrl + "')";
-                })
-                .catch(e => console.warn('图片代理加载也失败:', url, e));
+    img.onload = () => {
+        // 直连成功，无需额外操作（CSS background-image已经在显示）
+    };
+    img.onerror = async () => {
+        // 直连失败，通过代理获取blob并替换背景
+        console.warn('图片直连失败，尝试代理加载:', url);
+        const blobUrl = await fetchBlobWithProxy(url, 10000);
+        if (blobUrl) {
+            const page = document.getElementById('slide-page');
+            if (page) page.style.backgroundImage = "url('" + blobUrl + "')";
+        } else {
+            console.warn('图片代理加载也失败:', url);
         }
     };
     img.src = url;
