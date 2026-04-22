@@ -987,53 +987,128 @@ function ensureHttps(url) {
     return url.replace(/^http:\/\//i, 'https://');
 }
 
-// CORS代理备选方案：当直接URL播放失败时调用
-// 使用多个代理，只请求前64KB检测可用性，再完整下载
-async function tryCorsProxyFallback(originalUrl) {
-    if (!currentAudio || !currentAudio.audio) return;
+// ============ IndexedDB 音频缓存 ============
+// 解决 oss.top237.top 没有CORS头、GitHub Pages 跨域无法播放的问题
+// 方案：一键匹配后在后台通过CORS代理下载音频缓存到IndexedDB，播放时直接用缓存
 
-    const proxies = [
-        'https://api.codetabs.com/v1/proxy?quest=',
-        'https://corsproxy.io/?',
-    ];
+const AUDIO_CACHE_DB = 'worship-audio-cache';
+const AUDIO_CACHE_STORE = 'audios';
+const CORS_PROXY_URL = 'https://api.codetabs.com/v1/proxy?quest=';
 
-    for (const prefix of proxies) {
-        try {
-            const proxyUrl = prefix + encodeURIComponent(originalUrl);
-            // 先用HEAD请求测试代理是否可用（快速）
-            const headResp = await fetch(proxyUrl, { method: 'HEAD' });
-            if (!headResp.ok) continue;
+let audioDB = null; // IndexedDB 实例
 
-            // 代理可用，开始下载
-            document.getElementById('audio-btn-play').textContent = '⏳ 下载音频...';
-            const resp = await fetch(proxyUrl);
-            if (!resp.ok) continue;
-
-            const blob = await resp.blob();
-            if (blob.size < 1000) continue; // 太小说明不是有效音频
-
-            const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
-            const blobUrl = URL.createObjectURL(audioBlob);
-
-            // 检查用户是否已切换到其他幻灯片
-            if (!currentAudio || currentAudio.audio.src !== originalUrl) {
-                URL.revokeObjectURL(blobUrl);
-                return;
+// 初始化 IndexedDB
+async function openAudioDB() {
+    if (audioDB) return audioDB;
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(AUDIO_CACHE_DB, 1);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(AUDIO_CACHE_STORE)) {
+                db.createObjectStore(AUDIO_CACHE_STORE, { keyPath: 'url' });
             }
+        };
+        req.onsuccess = (e) => { audioDB = e.target.result; resolve(audioDB); };
+        req.onerror = () => reject(req.error);
+    });
+}
 
-            currentAudio.audio.src = blobUrl;
-            currentAudio.blobUrl = blobUrl;
-            currentAudio.audio.load();
-            return; // 成功
-        } catch (e) {
-            console.warn('代理', prefix, '失败:', e.message);
+// 从缓存读取 blob URL
+async function getCachedAudio(url) {
+    try {
+        const db = await openAudioDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(AUDIO_CACHE_STORE, 'readonly');
+            const req = tx.objectStore(AUDIO_CACHE_STORE).get(url);
+            req.onsuccess = () => {
+                if (req.result && req.result.blob) {
+                    const blobUrl = URL.createObjectURL(req.result.blob);
+                    resolve(blobUrl);
+                } else {
+                    resolve(null);
+                }
+            };
+            req.onerror = () => resolve(null);
+        });
+    } catch (e) {
+        return null;
+    }
+}
+
+// 存入缓存
+async function cacheAudio(url, blob) {
+    try {
+        const db = await openAudioDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
+            tx.objectStore(AUDIO_CACHE_STORE).put({ url, blob, ts: Date.now() });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        });
+    } catch (e) {
+        return false;
+    }
+}
+
+// 后台预下载音频（不阻塞UI，下载完存入缓存）
+async function prefetchAudioInBackground(remoteUrl) {
+    if (!remoteUrl) return;
+    const url = ensureHttps(remoteUrl);
+
+    // 已缓存则跳过
+    try {
+        const db = await openAudioDB();
+        const existing = await new Promise(resolve => {
+            const req = db.transaction(AUDIO_CACHE_STORE, 'readonly').objectStore(AUDIO_CACHE_STORE).get(url);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        });
+        if (existing && existing.blob) {
+            console.log('音频已缓存，跳过下载:', url.substring(0, 60));
+            return;
         }
+    } catch (e) {}
+
+    // 在后台下载
+    try {
+        console.log('后台预下载音频:', url.substring(0, 60) + '...');
+        const proxyUrl = CORS_PROXY_URL + encodeURIComponent(url);
+        const resp = await fetch(proxyUrl);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const blob = await resp.blob();
+        if (blob.size > 1000) {
+            const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+            await cacheAudio(url, audioBlob);
+            console.log('音频缓存成功:', url.substring(0, 60), blob.size + ' bytes');
+        }
+    } catch (e) {
+        console.warn('音频预下载失败:', e.message);
+    }
+}
+
+// 播放时先查缓存，缓存命中立即播放；否则实时下载
+async function loadAudioWithCache(remoteUrl) {
+    const url = ensureHttps(remoteUrl);
+
+    // 先查缓存
+    const cachedBlobUrl = await getCachedAudio(url);
+    if (cachedBlobUrl) {
+        console.log('命中缓存，直接播放');
+        return { blobUrl: cachedBlobUrl, fromCache: true };
     }
 
-    // 所有方案都失败
-    if (currentAudio) {
-        document.getElementById('audio-btn-play').textContent = '⚠️ 播放失败';
-    }
+    // 缓存未命中，实时通过代理下载
+    console.log('缓存未命中，实时下载...');
+    const proxyUrl = CORS_PROXY_URL + encodeURIComponent(url);
+    const resp = await fetch(proxyUrl);
+    if (!resp.ok) throw new Error('代理HTTP ' + resp.status);
+    const blob = await resp.blob();
+    if (blob.size < 1000) throw new Error('音频文件太小，可能无效');
+    const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+    // 同时存入缓存
+    await cacheAudio(url, audioBlob);
+    const blobUrl = URL.createObjectURL(audioBlob);
+    return { blobUrl, fromCache: false };
 }
 // 预加载远程图片（仅用于非base64的图片URL）
 // base64内嵌的图片不需要预加载，CSS直接设置即可显示
@@ -1661,6 +1736,8 @@ async function fetchLyrics(type) {
             }
             audioFiles[type] = { url: ensureHttps(audioUrl), name: song.title + '.mp3', isRemote: true };
             document.getElementById('audio-' + type + '-name').textContent = '🎵 ' + song.title + '（自动加载）';
+            // 后台预下载音频到IndexedDB缓存（不阻塞UI）
+            prefetchAudioInBackground(audioUrl);
         }
 
         showToast('✅ 已获取「' + song.title + '」的歌词和音频！');
@@ -1743,6 +1820,8 @@ async function fetchLyricsSilent(type) {
             if (audioFiles[type] && audioFiles[type].isBlob) URL.revokeObjectURL(audioFiles[type].url);
             audioFiles[type] = { url: ensureHttps(audioUrl), name: song.title + '.mp3', isRemote: true };
             document.getElementById('audio-' + type + '-name').textContent = '🎵 ' + song.title + '（自动加载）';
+            // 后台预下载音频到IndexedDB缓存（不阻塞UI）
+            prefetchAudioInBackground(audioUrl);
         }
 
         return { success: song.title };
@@ -2128,34 +2207,51 @@ async function updateAudioForSlide() {
             const audio = new Audio();
             currentAudio = { key: s.audioKey, audio: audio, name: info.name };
 
-            // 设置音频类型提示（某些浏览器根据此决定是否播放）
-            audio.type = 'audio/mpeg';
+            const btn = document.getElementById('audio-btn-play');
+            btn.textContent = '⏳ 准备中...';
+            btn.disabled = true;
 
-            audio.addEventListener('timeupdate', () => {
-                document.getElementById('audio-time').textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration || 0);
+            // 先从缓存加载，缓存未命中时实时通过代理下载
+            loadAudioWithCache(audioUrl).then(({ blobUrl, fromCache }) => {
+                if (!currentAudio || currentAudio.key !== s.audioKey) {
+                    URL.revokeObjectURL(blobUrl);
+                    return; // 用户已切换幻灯片
+                }
+                currentAudio.blobUrl = blobUrl;
+
+                audio.addEventListener('timeupdate', () => {
+                    document.getElementById('audio-time').textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration || 0);
+                });
+                audio.addEventListener('ended', () => {
+                    document.getElementById('audio-btn-play').textContent = '▶ 播放';
+                });
+                audio.addEventListener('canplay', () => {
+                    btn.disabled = false;
+                    btn.textContent = '▶ 播放';
+                });
+                audio.addEventListener('error', () => {
+                    btn.disabled = false;
+                    btn.textContent = '⚠️ 播放失败';
+                });
+                audio.src = blobUrl;
+                if (!fromCache) {
+                    console.log('实时下载完成，开始播放');
+                }
+            }).catch(err => {
+                console.error('音频加载失败:', err.message);
+                if (currentAudio && currentAudio.key === s.audioKey) {
+                    btn.disabled = false;
+                    btn.textContent = '⚠️ 播放失败';
+                }
             });
-            audio.addEventListener('ended', () => {
-                document.getElementById('audio-btn-play').textContent = '▶ 播放';
-            });
-            audio.addEventListener('canplay', () => {
-                document.getElementById('audio-btn-play').textContent = '▶ 播放';
-            });
-            audio.addEventListener('error', () => {
-                // 直接URL失败时，尝试通过CORS代理流式下载
-                document.getElementById('audio-btn-play').textContent = '⏳ 重试中...';
-                tryCorsProxyFallback(audioUrl);
-            });
-            audio.preload = 'metadata';
-            audio.src = audioUrl;
-            audio.load();
         }
     } else {
         bar.classList.remove('show');
         // Don't auto-stop — let audio continue if user wants
     }
     // Update play button state
-    if (currentAudio) {
-        document.getElementById('audio-btn-play').textContent = currentAudio.audio.paused ? '▶ 播放' : '⏸ 暂停';
+    if (currentAudio && !currentAudio.audio.paused) {
+        document.getElementById('audio-btn-play').textContent = '⏸ 暂停';
     }
 }
 
