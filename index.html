@@ -655,6 +655,62 @@
             min-width: 70px;
             text-align: center;
         }
+        /* 音频进度条 */
+        .slide-audio-bar .audio-progress-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 80px;
+        }
+        .slide-audio-bar .audio-progress {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            cursor: pointer;
+            outline: none;
+        }
+        .slide-audio-bar .audio-progress::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: #c084fc;
+            cursor: pointer;
+            box-shadow: 0 0 4px rgba(192,132,252,0.6);
+        }
+        .slide-audio-bar .audio-progress::-moz-range-thumb {
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            background: #c084fc;
+            cursor: pointer;
+            border: none;
+        }
+        /* 音频缓存状态标识 */
+        .audio-cache-badge {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .audio-cache-badge.downloading {
+            background: rgba(245,215,110,0.2);
+            color: #F5D76E;
+            border: 1px solid rgba(245,215,110,0.4);
+        }
+        .audio-cache-badge.cached {
+            background: rgba(34,197,94,0.2);
+            color: #4ade80;
+            border: 1px solid rgba(34,197,94,0.4);
+        }
+        .audio-cache-badge.failed {
+            background: rgba(239,68,68,0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239,68,68,0.4);
+        }
 
         .example-toggle {
             background: none;
@@ -897,6 +953,13 @@
 
 <!-- 右侧悬浮操作面板 -->
 <div class="side-panel" id="side-panel">
+    <button class="side-btn" id="btn-side-oneclick"
+        style="background:linear-gradient(135deg,rgba(245,215,110,0.35),rgba(192,132,252,0.35));border:1px solid rgba(245,215,110,0.6);color:#F5D76E;"
+        onclick="oneClickGenerate()">
+        <span class="side-icon">🚀</span>
+        <span class="side-label" id="oneclick-btn-label">一键生成</span>
+        <span class="side-hint" id="oneclick-btn-hint">全流程</span>
+    </button>
     <button class="side-btn side-btn-parse" onclick="parseFromSidePanel()" id="btn-side-parse">
         <span class="side-icon">📋</span>
         <span class="side-label" id="parse-btn-label">一键匹配</span>
@@ -939,7 +1002,11 @@
         <button id="audio-btn-replay" onclick="replayAudio()">⏮ 重播</button>
         <button id="audio-btn-play" onclick="toggleAudio()">▶ 播放</button>
         <span class="audio-name" id="audio-name"></span>
-        <span class="audio-time" id="audio-time">0:00</span>
+        <div class="audio-progress-wrap">
+            <input type="range" class="audio-progress" id="audio-progress" min="0" max="100" value="0"
+                oninput="seekAudio(this.value)" onclick="event.stopPropagation()">
+        </div>
+        <span class="audio-time" id="audio-time">0:00 / 0:00</span>
     </div>
     <div class="slide-nav">
         <button onclick="event.stopPropagation();toggleToc()">📑 目录</button>
@@ -1051,7 +1118,8 @@ async function cacheAudio(url, blob) {
 }
 
 // 后台预下载音频（不阻塞UI，下载完存入缓存）
-async function prefetchAudioInBackground(remoteUrl) {
+// onStatus(state): 'downloading' | 'cached' | 'failed' 可选回调
+async function prefetchAudioInBackground(remoteUrl, onStatus) {
     if (!remoteUrl) return;
     const url = ensureHttps(remoteUrl);
 
@@ -1065,11 +1133,13 @@ async function prefetchAudioInBackground(remoteUrl) {
         });
         if (existing && existing.blob) {
             console.log('音频已缓存，跳过下载:', url.substring(0, 60));
+            if (onStatus) onStatus('cached');
             return;
         }
     } catch (e) {}
 
     // 在后台下载
+    if (onStatus) onStatus('downloading');
     try {
         console.log('后台预下载音频:', url.substring(0, 60) + '...');
         const proxyUrl = CORS_PROXY_URL + encodeURIComponent(url);
@@ -1080,9 +1150,13 @@ async function prefetchAudioInBackground(remoteUrl) {
             const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
             await cacheAudio(url, audioBlob);
             console.log('音频缓存成功:', url.substring(0, 60), blob.size + ' bytes');
+            if (onStatus) onStatus('cached');
+        } else {
+            if (onStatus) onStatus('failed');
         }
     } catch (e) {
         console.warn('音频预下载失败:', e.message);
+        if (onStatus) onStatus('failed');
     }
 }
 
@@ -1216,6 +1290,71 @@ const FIXED = {
 
 
 
+// ============ 🚀 一键生成（解析 → 匹配 → 幻灯片，三步全流程）============
+async function oneClickGenerate() {
+    const raw = document.getElementById('paste-area').value.trim();
+    if (!raw) {
+        showToast('请先在上方粘贴礼拜内容', true);
+        return;
+    }
+    const btn = document.getElementById('btn-side-oneclick');
+    const labelEl = btn.querySelector('#oneclick-btn-label');
+    const hintEl = btn.querySelector('#oneclick-btn-hint');
+    btn.disabled = true;
+    const t0 = Date.now();
+
+    const setStep = (step, hint) => {
+        labelEl.textContent = '第' + step + '步/3步';
+        hintEl.textContent = hint;
+    };
+
+    try {
+        // 步骤1：解析文字
+        setStep(1, '解析内容…');
+        document.getElementById('edit-section').style.display = 'none';
+        await parseText();
+
+        // 步骤2：并行搜索（复用 parseFromSidePanel 逻辑）
+        setStep(2, '搜索音频经文…');
+        const tasks = [];
+        const fields = ['praise1', 'praise2', 'special', 'hymn1', 'hymn2'];
+        for (const type of fields) {
+            if (document.getElementById('f-' + type).value.trim()) tasks.push({ kind: 'audio', type });
+        }
+        const psalmNum = document.getElementById('f-psalm').value.trim().replace(/篇/g, '');
+        if (psalmNum && /^\d+$/.test(psalmNum)) tasks.push({ kind: 'psalm' });
+        if (document.getElementById('f-sermon1').value.trim()) tasks.push({ kind: 'sermon', type: 'sermon1' });
+        if (document.getElementById('f-sermon2').value.trim()) tasks.push({ kind: 'sermon', type: 'sermon2' });
+
+        if (tasks.length > 0) {
+            hintEl.textContent = tasks.length + '项并行…';
+            await Promise.allSettled(tasks.map(t => {
+                if (t.kind === 'audio') return fetchLyricsSilent(t.type);
+                if (t.kind === 'psalm') return fetchPsalmSilent();
+                if (t.kind === 'sermon') return fetchSermonSilent(t.type);
+            }));
+        }
+
+        // 后台预取固定歌曲
+        loadFixedSongAudioById('praise-welcome', '5b00f970605d87b30340f3b2487b0387', '你原来是宝贵的');
+        loadFixedSongAudioById('praise-final', '5b00f970605d87b30340f5467f65e853', '主啊，在我人生中');
+
+        // 步骤3：生成幻灯片
+        setStep(3, '生成幻灯片…');
+        await buildSlideshow();
+
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+        showToast('🚀 一键生成完成！耗时 ' + elapsed + '秒');
+    } catch (err) {
+        console.error('一键生成出错:', err);
+        showToast('❌ 出错: ' + err.message, true);
+    } finally {
+        btn.disabled = false;
+        labelEl.textContent = '一键生成';
+        hintEl.textContent = '全流程';
+    }
+}
+
 // ============ Side Panel: 一键匹配 ============
 async function parseFromSidePanel() {
     const btn = document.getElementById('btn-side-parse');
@@ -1334,6 +1473,10 @@ async function parseFromSidePanel() {
     setTimeout(() => {
         document.getElementById('edit-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 300);
+
+    // 后台预取固定歌曲（你原来是宝贵的 + 主啊在我人生中），减少生成幻灯片时的等待
+    loadFixedSongAudioById('praise-welcome', '5b00f970605d87b30340f3b2487b0387', '你原来是宝贵的');
+    loadFixedSongAudioById('praise-final', '5b00f970605d87b30340f5467f65e853', '主啊，在我人生中');
 
     // 8秒后恢复按钮
     setTimeout(() => {
@@ -1735,9 +1878,13 @@ async function fetchLyrics(type) {
                 URL.revokeObjectURL(audioFiles[type].url);
             }
             audioFiles[type] = { url: ensureHttps(audioUrl), name: song.title + '.mp3', isRemote: true };
-            document.getElementById('audio-' + type + '-name').textContent = '🎵 ' + song.title + '（自动加载）';
-            // 后台预下载音频到IndexedDB缓存（不阻塞UI）
-            prefetchAudioInBackground(audioUrl);
+            const nameEl = document.getElementById('audio-' + type + '-name');
+            nameEl.textContent = '🎵 ' + song.title + ' ⏳缓存中…';
+            // 后台预下载音频到IndexedDB缓存（不阻塞UI），完成后更新状态
+            prefetchAudioInBackground(audioUrl, (state) => {
+                if (state === 'cached') nameEl.textContent = '🎵 ' + song.title + ' ✅已缓存';
+                else if (state === 'failed') nameEl.textContent = '🎵 ' + song.title + ' ⚠️缓存失败';
+            });
         }
 
         showToast('✅ 已获取「' + song.title + '」的歌词和音频！');
@@ -1819,9 +1966,13 @@ async function fetchLyricsSilent(type) {
         if (audioUrl) {
             if (audioFiles[type] && audioFiles[type].isBlob) URL.revokeObjectURL(audioFiles[type].url);
             audioFiles[type] = { url: ensureHttps(audioUrl), name: song.title + '.mp3', isRemote: true };
-            document.getElementById('audio-' + type + '-name').textContent = '🎵 ' + song.title + '（自动加载）';
-            // 后台预下载音频到IndexedDB缓存（不阻塞UI）
-            prefetchAudioInBackground(audioUrl);
+            const nameEl2 = document.getElementById('audio-' + type + '-name');
+            nameEl2.textContent = '🎵 ' + song.title + ' ⏳缓存中…';
+            // 后台预下载音频到IndexedDB缓存（不阻塞UI），完成后更新状态
+            prefetchAudioInBackground(audioUrl, (state) => {
+                if (state === 'cached') nameEl2.textContent = '🎵 ' + song.title + ' ✅已缓存';
+                else if (state === 'failed') nameEl2.textContent = '🎵 ' + song.title + ' ⚠️缓存失败';
+            });
         }
 
         return { success: song.title };
@@ -2028,7 +2179,10 @@ async function loadFixedSongAudioById(audioKey, songId, displayName) {
         const resp = await fetch(SONG_API + '/start/zanmei/searchByIdsLazyField?ids=' + songId + '&fields=adUrl');
         const json = await resp.json();
         if (json.code === 200 && json.data && json.data.length > 0 && json.data[0].adUrl) {
-            audioFiles[audioKey] = { url: ensureHttps(json.data[0].adUrl), name: displayName + '.mp3', isRemote: true };
+            const url = ensureHttps(json.data[0].adUrl);
+            audioFiles[audioKey] = { url: url, name: displayName + '.mp3', isRemote: true };
+            // 立即启动后台预下载（不阻塞UI）
+            prefetchAudioInBackground(url);
         }
     } catch (e) {
         console.warn('Failed to load audio for ' + displayName, e);
@@ -2220,7 +2374,10 @@ async function updateAudioForSlide() {
                 currentAudio.blobUrl = blobUrl;
 
                 audio.addEventListener('timeupdate', () => {
-                    document.getElementById('audio-time').textContent = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration || 0);
+                    const cur = audio.currentTime, dur = audio.duration || 0;
+                    document.getElementById('audio-time').textContent = formatTime(cur) + ' / ' + formatTime(dur);
+                    const prog = document.getElementById('audio-progress');
+                    if (prog && dur > 0 && !prog._seeking) prog.value = (cur / dur) * 100;
                 });
                 audio.addEventListener('ended', () => {
                     document.getElementById('audio-btn-play').textContent = '▶ 播放';
@@ -2310,6 +2467,14 @@ function replayAudio() {
     currentAudio.audio.currentTime = 0;
     currentAudio.audio.play();
     document.getElementById('audio-btn-play').textContent = '⏸ 暂停';
+}
+
+function seekAudio(val) {
+    if (!currentAudio || !currentAudio.audio.duration) return;
+    const prog = document.getElementById('audio-progress');
+    if (prog) prog._seeking = true;
+    currentAudio.audio.currentTime = (val / 100) * currentAudio.audio.duration;
+    setTimeout(() => { if (prog) prog._seeking = false; }, 200);
 }
 
 // ============ Save / Restore Last Record ============
@@ -2427,7 +2592,16 @@ function restoreLastRecord() {
             if (info && info.url) {
                 audioFiles[key] = { url: ensureHttps(info.url), name: info.name, isRemote: true };
                 const nameEl = document.getElementById('audio-' + key + '-name');
-                if (nameEl) nameEl.textContent = '🎵 ' + info.name + '（已恢复）';
+                if (nameEl) {
+                    nameEl.textContent = '🎵 ' + info.name + ' ⏳缓存中…';
+                    // 恢复后自动预下载，完成后更新状态
+                    (function(el, n, u) {
+                        prefetchAudioInBackground(u, (state) => {
+                            if (state === 'cached') el.textContent = '🎵 ' + n + ' ✅已缓存';
+                            else if (state === 'failed') el.textContent = '🎵 ' + n + ' ⚠️缓存失败';
+                        });
+                    })(nameEl, info.name, info.url);
+                }
                 restoredAudioCount++;
             }
         }
@@ -2523,6 +2697,26 @@ document.addEventListener('keydown', e => {
     else if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); prevSlide(); }
     else if (e.key === 'Escape') closeSlideshow();
 });
+
+// ============ 移动端触摸滑动翻页 ============
+(function() {
+    let touchStartX = 0, touchStartY = 0;
+    const vp = () => document.getElementById('slide-viewport');
+    document.addEventListener('touchstart', e => {
+        if (!document.getElementById('slideshow-overlay').classList.contains('show')) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+        if (!document.getElementById('slideshow-overlay').classList.contains('show')) return;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            if (dx < 0) nextSlide();
+            else prevSlide();
+        }
+    }, { passive: true });
+})();
 
 // ============ Generate PPT ============
 async function generatePPT() {
