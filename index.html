@@ -1639,7 +1639,11 @@ async function parseText() {
 
     // 3. Praise songs: "赞美111要深深思想耶稣，134拥有望楼的守望者"
     //    兼容有/无换行：在"赞美"和"诗篇"/"新编赞美"/"论坛"之间取内容
-    const praiseEnd = raw.match(/赞美[\s\S]*?(?=诗篇|新编赞美|论坛)/);
+    let praiseEnd = raw.match(/赞美[\s\S]*?(?=诗篇|新编赞美|论坛)/);
+    if (!praiseEnd) {
+        // 回退：取"赞美"到下一个段落换行
+        praiseEnd = raw.match(/赞美[^\n]*/);
+    }
     if (praiseEnd) {
         const praiseContent = praiseEnd[0].replace(/^赞美\s*[：:，,]?\s*/, '');
         // 去掉换行，按逗号分割
@@ -1655,7 +1659,12 @@ async function parseText() {
 
     // 5. Hymn numbers: "新编赞美41颂赞主圣名歌，327坚固保障歌"
     //    在"新编赞美"和"论坛"/"777"之间取内容
-    const hymnEnd = raw.match(/新编赞美[\s\S]*?(?=论坛|777[的])/);
+    //    优先按边界匹配，若匹配不到则取"新编赞美"到行末/段落末
+    let hymnEnd = raw.match(/新编赞美[\s\S]*?(?=论坛|777[的])/);
+    if (!hymnEnd) {
+        // 回退：取"新编赞美"到下一个段落换行
+        hymnEnd = raw.match(/新编赞美[^\n]*/);
+    }
     if (hymnEnd) {
         const hymnContent = hymnEnd[0].replace(/^新编赞美\s*[：:，,]?\s*/, '');
         const hymnText = hymnContent.replace(/\s+/g, '').replace(/[，,、]/g, '\x00');
@@ -1664,34 +1673,38 @@ async function parseText() {
         document.getElementById('f-hymn2').value = (nums[1] || '').trim();
     }
 
-    // 6. Forum + 777: 论坛后到第一个换行为论坛内容，剩下为777宣告
+    // 6. Forum + 777: 论坛后到第一个句号"。"=论坛内容（含句号），句号后=777宣告
+    //    也兼容换行分割：多行时第一行=论坛，剩余=777
     let forumText = '';
     let declText = '';
     const forumMatch = raw.match(/论坛\s*(?:[（(]提问[）)])?\s*[：:\s]?\s*([\s\S]*?)$/);
     if (forumMatch) {
         const afterForum = forumMatch[1].trim();
-        // 按换行分割：第一行（段）= 论坛，剩余 = 777
-        // 也处理连续文本中可能没有换行的情况（尝试按特征分割）
+        // 按换行分割
         const fParts = afterForum.split(/\n/).map(l => l.trim()).filter(Boolean);
         if (fParts.length >= 2) {
             // 多行：第一段 = 论坛，剩余 = 777
             forumText = fParts[0];
             declText = fParts.slice(1).join('\n');
-        } else if (fParts.length === 1 && fParts[0].length > 80) {
-            // 单行但很长（连续文本）：尝试在合适位置切分
-            // 论坛特征：含"持定"/"找出"/"基准"/"使命"/"准备"等
-            // 777特征：含"望楼"/"旅程"/"里程碑"/"%"/"camp"
+        } else if (fParts.length === 1) {
             const line = fParts[0];
-            // 找到第一个777特征词的位置作为分割点
-            const declSplit = line.search(/宝座的望楼|300%|里程碑|\.3camp|医治伟人/i);
-            if (declSplit > 0) {
-                forumText = line.substring(0, declSplit).trim();
-                declText = line.substring(declSplit).trim();
+            // 单行：按第一个中文句号"。"分割
+            const dotIdx = line.indexOf('。');
+            if (dotIdx > 0) {
+                forumText = line.substring(0, dotIdx + 1).trim();
+                declText = line.substring(dotIdx + 1).trim();
+            } else if (line.length > 80) {
+                // 没有句号但很长：按特征词切分
+                const declSplit = line.search(/宝座的望楼|300%|里程碑|\.3camp|医治伟人/i);
+                if (declSplit > 0) {
+                    forumText = line.substring(0, declSplit).trim();
+                    declText = line.substring(declSplit).trim();
+                } else {
+                    forumText = line;
+                }
             } else {
                 forumText = line;
             }
-        } else {
-            forumText = afterForum;
         }
     }
 
