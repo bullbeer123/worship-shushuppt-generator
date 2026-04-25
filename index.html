@@ -1639,11 +1639,46 @@ async function parseText() {
         document.getElementById('f-forum').value = forumText;
     }
 
-    // 7. 777 declaration (多行匹配)
-    const declMatches = raw.match(/777[的][^\n]*/gm);
-    if (declMatches) {
-        document.getElementById('f-declaration').value = declMatches.map(d => d.trim()).join('\n');
+    // 7. 777 declaration
+    //    格式A（有前缀）："777的祷告-绝对望楼"  → 逐行匹配 777的xxx
+    //    格式B（无前缀）：最后2-3行纯文本      → 识别特征：短行、含".旅程"或"%"等关键词
+    let declText = '';
+    const declPrefixMatches = raw.match(/^.*777[的][^\n]*/gm);
+    if (declPrefixMatches && declPrefixMatches.length > 0) {
+        // 格式A：有 "777的xxx" 前缀
+        declText = declPrefixMatches.map(d => d.trim()).join('\n');
+    } else {
+        // 格式B：无前缀，取文本最后2-3行（排除空行）
+        // 先找论坛之后的全部文本（论坛或新编赞美之后到末尾）
+        const afterForum = raw.match(/(?:论坛|新编赞美)[\s\S]*$/);
+        if (afterForum) {
+            const allLines = afterForum[0].split('\n').map(l => l.trim()).filter(Boolean);
+            // 去掉第一行（"论坛"或"新编赞美"本身）
+            const contentLines = allLines.slice(1);
+            if (contentLines.length >= 2) {
+                // 最后2-3行，特征：较短、含"."分隔的短语或含"%"或"camp"等
+                const declLines = [];
+                for (let i = contentLines.length - 1; i >= Math.max(0, contentLines.length - 3); i--) {
+                    const line = contentLines[i];
+                    // 跳过明显的论坛长句（含"持定"/"找出"/"基准"等）
+                    if (line.length > 40 && !/[.%camp]/i.test(line)) continue;
+                    declLines.unshift(line);
+                }
+                if (declLines.length > 0) {
+                    declText = declLines.join('\n');
+                    // 同时从论坛内容中移除这些行
+                    const declSet = new Set(declLines);
+                    const filteredForum = contentLines.filter(l => !declSet.has(l)).join('\n');
+                    if (filteredForum.trim()) {
+                        document.getElementById('f-forum').value = filteredForum.trim();
+                    } else {
+                        document.getElementById('f-forum').value = '';
+                    }
+                }
+            }
+        }
     }
+    if (declText) document.getElementById('f-declaration').value = declText;
 
     // Show edit section
     document.getElementById('edit-section').style.display = 'block';
