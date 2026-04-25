@@ -1573,8 +1573,8 @@ async function parseText() {
     const sectionKws = ['赞美', '诗篇', '新编赞美', '论坛', '题目'];
     const kwCount = sectionKws.filter(kw => kwLine.includes(kw)).length;
     const actualLines = raw.split('\n').filter(l => l.trim()).length;
-    // 关键字≥3个 且 实际行数≤关键字数+3（多给一点余量），说明关键字粘在一起
-    if (kwCount >= 3 && actualLines <= kwCount + 3) {
+    // 关键字≥2个 且 实际行数≤关键字数+5（降低阈值，微信OCR行数少）
+    if (kwCount >= 2 && actualLines <= kwCount + 5) {
         raw = raw
             .replace(/(?<!\n)(?=新编赞美)/g, '\n')
             .replace(/(?<!\n)(?=赞美)/g, '\n')
