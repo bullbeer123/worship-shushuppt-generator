@@ -1766,6 +1766,43 @@ async function fetchBible(type) {
 const SONG_API = 'https://api.top237.top/ry-api';
 let songCache = null; // Cache for full song list (1160 songs)
 
+// ---- 歌曲音频URL持久化字典 (localStorage) ----
+// 键：歌名（去除前缀数字后的标准化名称），值：{ url, name, ts }
+// 作用：高频赞美歌曲的URL直接从本地取，跳过API搜索，提升速度
+const SONG_URL_DICT_KEY = 'worship-song-url-dict';
+
+function getSongUrlDict() {
+    try {
+        return JSON.parse(localStorage.getItem(SONG_URL_DICT_KEY) || '{}');
+    } catch (e) { return {}; }
+}
+
+function setSongUrlDict(dict) {
+    try { localStorage.setItem(SONG_URL_DICT_KEY, JSON.stringify(dict)); } catch (e) {}
+}
+
+// 记录一首歌的音频URL到字典
+function saveSongUrlToDict(songTitle, audioUrl, songName) {
+    if (!songTitle || !audioUrl) return;
+    const dict = getSongUrlDict();
+    dict[songTitle] = { url: ensureHttps(audioUrl), name: songName || (songTitle + '.mp3'), ts: Date.now() };
+    setSongUrlDict(dict);
+}
+
+// 从字典查找歌曲（模糊匹配：完整title或包含关系）
+function lookupSongUrlFromDict(query) {
+    const dict = getSongUrlDict();
+    // 完整匹配优先
+    if (dict[query]) return dict[query];
+    // 模糊匹配：字典中title包含query，或query包含title
+    const q = query.toLowerCase();
+    for (const [title, info] of Object.entries(dict)) {
+        const t = title.toLowerCase();
+        if (t.includes(q) || q.includes(t)) return info;
+    }
+    return null;
+}
+
 async function getSongList() {
     if (songCache) return songCache;
     const resp = await fetch(SONG_API + '/start/zanmei/sgbList');
@@ -1877,14 +1914,9 @@ async function fetchLyrics(type) {
             if (audioFiles[type] && audioFiles[type].isBlob) {
                 URL.revokeObjectURL(audioFiles[type].url);
             }
-            audioFiles[type] = { url: ensureHttps(audioUrl), name: song.title + '.mp3', isRemote: true };
-            const nameEl = document.getElementById('audio-' + type + '-name');
-            nameEl.textContent = '🎵 ' + song.title + ' ⏳缓存中…';
-            // 后台预下载音频到IndexedDB缓存（不阻塞UI），完成后更新状态
-            prefetchAudioInBackground(audioUrl, (state) => {
-                if (state === 'cached') nameEl.textContent = '🎵 ' + song.title + ' ✅已缓存';
-                else if (state === 'failed') nameEl.textContent = '🎵 ' + song.title + ' ⚠️缓存失败';
-            });
+            // ★ 写入字典（供下次快速命中）
+            saveSongUrlToDict(song.title, audioUrl, song.title + '.mp3');
+            _applyAudioToField(type, audioUrl, song.title);
         }
 
         showToast('✅ 已获取「' + song.title + '」的歌词和音频！');
@@ -1897,6 +1929,21 @@ async function fetchLyrics(type) {
 }
 
 // ============ 一键搜索所有音频 ============
+// 辅助：把音频URL应用到对应字段（含缓存状态显示）
+function _applyAudioToField(type, audioUrl, songTitle) {
+    if (!audioUrl) return;
+    if (audioFiles[type] && audioFiles[type].isBlob) URL.revokeObjectURL(audioFiles[type].url);
+    audioFiles[type] = { url: ensureHttps(audioUrl), name: songTitle + '.mp3', isRemote: true };
+    const nameEl = document.getElementById('audio-' + type + '-name');
+    if (nameEl) {
+        nameEl.textContent = '🎵 ' + songTitle + ' ⏳缓存中…';
+        prefetchAudioInBackground(audioUrl, (state) => {
+            if (state === 'cached') nameEl.textContent = '🎵 ' + songTitle + ' ✅已缓存';
+            else if (state === 'failed') nameEl.textContent = '🎵 ' + songTitle + ' ⚠️缓存失败';
+        });
+    }
+}
+
 // 静默搜索单首歌曲（不操作按钮UI，返回结果）
 async function fetchLyricsSilent(type) {
     const inputId = 'f-' + type;
@@ -1914,6 +1961,17 @@ async function fetchLyricsSilent(type) {
     else if (type === 'hymn1' || type === 'hymn2') shijiFilter = 2;
 
     try {
+        // ★ 先查本地字典（高频赞美缓存，跳过API搜索）
+        // 注意：字典只缓存URL，歌词仍需在无歌词时回退到API
+        const dictHit = lookupSongUrlFromDict(query);
+        if (dictHit && document.getElementById(lyricsId).value.trim()) {
+            // 字典命中且歌词已填：只需补充音频URL，无需API调用
+            console.log('🎵 字典命中（跳过API）:', query, '->', dictHit.url.substring(0, 60));
+            _applyAudioToField(type, dictHit.url, dictHit.name.replace(/\.mp3$/, ''));
+            return { success: query + '（字典命中）' };
+        }
+
+        // ★ 正常API搜索流程
         const list = await getSongList();
         const candidateList = shijiFilter !== null ? list.filter(s => s.shiji_index === shijiFilter) : list;
         let matches = candidateList.filter(s => {
@@ -1962,17 +2020,10 @@ async function fetchLyricsSilent(type) {
         document.getElementById(lyricsId).value = lyric;
         document.getElementById(groupId).style.display = 'block';
 
-        // 加载音频
+        // 加载音频 + ★ 写入字典（供下次快速命中）
         if (audioUrl) {
-            if (audioFiles[type] && audioFiles[type].isBlob) URL.revokeObjectURL(audioFiles[type].url);
-            audioFiles[type] = { url: ensureHttps(audioUrl), name: song.title + '.mp3', isRemote: true };
-            const nameEl2 = document.getElementById('audio-' + type + '-name');
-            nameEl2.textContent = '🎵 ' + song.title + ' ⏳缓存中…';
-            // 后台预下载音频到IndexedDB缓存（不阻塞UI），完成后更新状态
-            prefetchAudioInBackground(audioUrl, (state) => {
-                if (state === 'cached') nameEl2.textContent = '🎵 ' + song.title + ' ✅已缓存';
-                else if (state === 'failed') nameEl2.textContent = '🎵 ' + song.title + ' ⚠️缓存失败';
-            });
+            saveSongUrlToDict(song.title, audioUrl, song.title + '.mp3');
+            _applyAudioToField(type, audioUrl, song.title);
         }
 
         return { success: song.title };
@@ -2666,7 +2717,20 @@ function showAlertDialog(title, message) {
 }
 
 // Check on page load
-window.addEventListener('DOMContentLoaded', checkRestoreBar);
+window.addEventListener('DOMContentLoaded', () => {
+    checkRestoreBar();
+    // ★ 启动时预热：字典中所有歌曲URL后台预下载（离线缓存）
+    setTimeout(() => {
+        const dict = getSongUrlDict();
+        const entries = Object.entries(dict);
+        if (entries.length === 0) return;
+        console.log('🎵 字典预热：开始预下载', entries.length, '首历史歌曲');
+        // 错开时间，避免同时发起大量请求
+        entries.forEach(([title, info], i) => {
+            setTimeout(() => prefetchAudioInBackground(info.url), i * 800);
+        });
+    }, 3000); // 延迟3秒，等页面交互稳定后再预热
+});
 
 
 // ============ Font & Line Height Adjust ============
