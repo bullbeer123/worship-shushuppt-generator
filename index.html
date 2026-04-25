@@ -1565,6 +1565,27 @@ async function parseText() {
         return;
     }
 
+    // 0. 微信连续文本预处理
+    //    微信提取的文字常把所有内容压成一行（换行丢失）
+    //    在关键字前插入换行，让后续正则正常工作
+    //    注意：必须先匹配"新编赞美"（4字）再匹配"赞美"（2字），否则会截断
+    const kwLine = raw.replace(/\n/g, ' '); // 合并为一行检测
+    const sectionKws = ['赞美', '诗篇', '新编赞美', '论坛', '题目'];
+    const kwCount = sectionKws.filter(kw => kwLine.includes(kw)).length;
+    const actualLines = raw.split('\n').filter(l => l.trim()).length;
+    // 关键字≥3个 且 实际行数≤关键字数+3（多给一点余量），说明关键字粘在一起
+    if (kwCount >= 3 && actualLines <= kwCount + 3) {
+        raw = raw
+            .replace(/(?<!\n)(?=新编赞美)/g, '\n')
+            .replace(/(?<!\n)(?=赞美)/g, '\n')
+            .replace(/(?<!\n)(?=诗篇)/g, '\n')
+            .replace(/(?<!\n)(?=论坛)/g, '\n')
+            .replace(/(?<!\n)(?=题目)/g, '\n')
+            .replace(/(?<!\n)(?=上周)/g, '\n')
+            .replace(/(?<!\n)(?=777的)/g, '\n');
+        console.log('微信连续文本已预处理分段');
+    }
+
 
     // 1. Date: "Sunday worship 2026.4.12" or "2026.4.12"
     let date = '';
@@ -1580,104 +1601,110 @@ async function parseText() {
         document.getElementById('f-lastweek').value = text;
     }
 
-    // 2. Title: find sermons after "题目" keyword, each starting with a Bible book abbreviation
+    // 2. Sermons (证道): after "题目", each starting with a Bible book abbreviation
+    //    连续文本中可能粘在一行: "可16:15-20xxx创6:14-22xxx"
+    //    需要在行内也检测圣经书卷切换点
     let title1 = '', title2 = '';
     const afterTitle = raw.split(/题目\s*/);
     if (afterTitle.length >= 2) {
-        const lines = afterTitle[1].split('\n').map(l => l.trim()).filter(Boolean);
-        // Find lines that start with a Bible book abbreviation
-        const bibleBooks = '(创|出|利|民|申|书|士|得|撒上|撒下|王上|王下|代上|代下|拉|尼|斯|伯|诗|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)';
-        const refRx = new RegExp('^' + bibleBooks + '\\d');
-        // Stop at known section keywords
-        const sectionRx = /^(赞美|诗篇|新编|论坛|777|Sunday)/;
-
-        let sermons = [];
-        for (const line of lines) {
-            if (sectionRx.test(line)) break;
-            if (refRx.test(line)) {
-                sermons.push(line);
-            } else if (sermons.length > 0) {
-                // Append continuation to last sermon
-                sermons[sermons.length - 1] += line;
-            }
+        const restOfText = afterTitle[1];
+        const bibleBooks = '(创|出|利|民|申|书|士|得|撒上|撒下|王上|王下|代上|代下|拉|尼|斯|伯|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)';
+        const sectionRx = /(赞美|诗篇|新编|论坛|777|Sunday)/;
+        // 找到所有圣经引用的起始位置
+        const refRx = new RegExp(bibleBooks + '\\d', 'g');
+        let match;
+        const sermonStarts = [];
+        while ((match = refRx.exec(restOfText)) !== null) {
+            // 检查这个引用前面是否是章节关键字（如果是则停止）
+            const before = restOfText.substring(Math.max(0, match.index - 20), match.index);
+            if (sectionRx.test(before)) break;
+            sermonStarts.push(match.index);
         }
-        title1 = sermons[0] || '';
-        title2 = sermons[1] || '';
+        // 取前两个作为证道1和证道2
+        if (sermonStarts.length >= 2) {
+            // 截取到赞美/诗篇等关键字前
+            let endIdx = restOfText.length;
+            const secMatch = restOfText.match(/(赞美|诗篇|新编赞美|论坛)/);
+            if (secMatch) endIdx = secMatch.index;
+            title1 = restOfText.substring(sermonStarts[0], sermonStarts[1]).trim();
+            title2 = restOfText.substring(sermonStarts[1], endIdx).trim();
+        } else if (sermonStarts.length === 1) {
+            const secMatch = restOfText.match(/(赞美|诗篇|新编赞美|论坛)/);
+            const endIdx = secMatch ? secMatch.index : restOfText.length;
+            title1 = restOfText.substring(sermonStarts[0], endIdx).trim();
+        }
     }
     document.getElementById('f-sermon1').value = title1;
     document.getElementById('f-sermon2').value = title2;
 
-    // 3. Praise songs: "赞美:76人生理由，131望楼的祷告" (跨行也匹配，支持冒号或逗号作为分隔)
-    const praiseMatch = raw.match(/赞美\s*[：:，,]?\s*([\s\S]*?)(?=\n\s*诗篇)/);
-    if (praiseMatch) {
-        // Merge into single line then split
-        const praiseText = praiseMatch[1].replace(/\s+/g, '').replace(/[，,、]/g, '\x00');
+    // 3. Praise songs: "赞美111要深深思想耶稣，134拥有望楼的守望者"
+    //    兼容有/无换行：在"赞美"和"诗篇"/"新编赞美"/"论坛"之间取内容
+    const praiseEnd = raw.match(/赞美[\s\S]*?(?=诗篇|新编赞美|论坛)/);
+    if (praiseEnd) {
+        const praiseContent = praiseEnd[0].replace(/^赞美\s*[：:，,]?\s*/, '');
+        // 去掉换行，按逗号分割
+        const praiseText = praiseContent.replace(/\s+/g, '').replace(/[，,、]/g, '\x00');
         const songs = praiseText.split('\x00').filter(Boolean);
         document.getElementById('f-praise1').value = (songs[0] || '').trim();
         document.getElementById('f-praise2').value = (songs[1] || '').trim();
     }
 
-    // 4. Psalm number: "诗篇:23篇" / "诗篇:23" / "诗篇23篇" / "诗篇 23篇"（无冒号也兼容）
+    // 4. Psalm number: "诗篇:23篇" / "诗篇:23" / "诗篇23篇" / "诗篇 145篇"（无冒号也兼容）
     const psalmMatch = raw.match(/诗篇\s*[：:，,]?\s*(\d+)/);
     if (psalmMatch) document.getElementById('f-psalm').value = psalmMatch[1].trim();
 
-    // 5. Hymn numbers: "新编赞美:277，337" (跨行也匹配，支持冒号或逗号)
-    const hymnMatch = raw.match(/新编赞美\s*[：:，,]?\s*([\s\S]*?)(?=\n\s*论坛|\n\s*777)/);
-    if (hymnMatch) {
-        // Merge into single line then split
-        const hymnText = hymnMatch[1].replace(/\s+/g, '').replace(/[，,、]/g, '\x00');
+    // 5. Hymn numbers: "新编赞美41颂赞主圣名歌，327坚固保障歌"
+    //    在"新编赞美"和"论坛"/"777"之间取内容
+    const hymnEnd = raw.match(/新编赞美[\s\S]*?(?=论坛|777[的])/);
+    if (hymnEnd) {
+        const hymnContent = hymnEnd[0].replace(/^新编赞美\s*[：:，,]?\s*/, '');
+        const hymnText = hymnContent.replace(/\s+/g, '').replace(/[，,、]/g, '\x00');
         const nums = hymnText.split('\x00').filter(Boolean);
         document.getElementById('f-hymn1').value = (nums[0] || '').trim();
         document.getElementById('f-hymn2').value = (nums[1] || '').trim();
     }
 
-    // 6. Forum: everything after "论坛" keyword until 777 or end of text
-    //    支持格式："论坛:内容" / "论坛 内容" / "论坛(提问):内容"
-    const forumMatch = raw.match(/论坛\s*(?:[（(]提问[）)])?\s*[：:\s]\s*([\s\S]*?)(?=\n\s*777|$)/);
-    if (forumMatch) {
-        const forumText = forumMatch[1].trim().replace(/([?？])\s*\n/g, '$1\n');
-        document.getElementById('f-forum').value = forumText;
-    }
-
-    // 7. 777 declaration
-    //    格式A（有前缀）："777的祷告-绝对望楼"  → 逐行匹配 777的xxx
-    //    格式B（无前缀）：最后2-3行纯文本      → 识别特征：短行、含".旅程"或"%"等关键词
+    // 6. Forum + 777: 论坛后到第一个换行为论坛内容，剩下为777宣告
+    let forumText = '';
     let declText = '';
-    const declPrefixMatches = raw.match(/^.*777[的][^\n]*/gm);
-    if (declPrefixMatches && declPrefixMatches.length > 0) {
-        // 格式A：有 "777的xxx" 前缀
-        declText = declPrefixMatches.map(d => d.trim()).join('\n');
-    } else {
-        // 格式B：无前缀，取文本最后2-3行（排除空行）
-        // 先找论坛之后的全部文本（论坛或新编赞美之后到末尾）
-        const afterForum = raw.match(/(?:论坛|新编赞美)[\s\S]*$/);
-        if (afterForum) {
-            const allLines = afterForum[0].split('\n').map(l => l.trim()).filter(Boolean);
-            // 去掉第一行（"论坛"或"新编赞美"本身）
-            const contentLines = allLines.slice(1);
-            if (contentLines.length >= 2) {
-                // 最后2-3行，特征：较短、含"."分隔的短语或含"%"或"camp"等
-                const declLines = [];
-                for (let i = contentLines.length - 1; i >= Math.max(0, contentLines.length - 3); i--) {
-                    const line = contentLines[i];
-                    // 跳过明显的论坛长句（含"持定"/"找出"/"基准"等）
-                    if (line.length > 40 && !/[.%camp]/i.test(line)) continue;
-                    declLines.unshift(line);
-                }
-                if (declLines.length > 0) {
-                    declText = declLines.join('\n');
-                    // 同时从论坛内容中移除这些行
-                    const declSet = new Set(declLines);
-                    const filteredForum = contentLines.filter(l => !declSet.has(l)).join('\n');
-                    if (filteredForum.trim()) {
-                        document.getElementById('f-forum').value = filteredForum.trim();
-                    } else {
-                        document.getElementById('f-forum').value = '';
-                    }
-                }
+    const forumMatch = raw.match(/论坛\s*(?:[（(]提问[）)])?\s*[：:\s]?\s*([\s\S]*?)$/);
+    if (forumMatch) {
+        const afterForum = forumMatch[1].trim();
+        // 按换行分割：第一行（段）= 论坛，剩余 = 777
+        // 也处理连续文本中可能没有换行的情况（尝试按特征分割）
+        const fParts = afterForum.split(/\n/).map(l => l.trim()).filter(Boolean);
+        if (fParts.length >= 2) {
+            // 多行：第一段 = 论坛，剩余 = 777
+            forumText = fParts[0];
+            declText = fParts.slice(1).join('\n');
+        } else if (fParts.length === 1 && fParts[0].length > 80) {
+            // 单行但很长（连续文本）：尝试在合适位置切分
+            // 论坛特征：含"持定"/"找出"/"基准"/"使命"/"准备"等
+            // 777特征：含"望楼"/"旅程"/"里程碑"/"%"/"camp"
+            const line = fParts[0];
+            // 找到第一个777特征词的位置作为分割点
+            const declSplit = line.search(/宝座的望楼|300%|里程碑|\.3camp|医治伟人/i);
+            if (declSplit > 0) {
+                forumText = line.substring(0, declSplit).trim();
+                declText = line.substring(declSplit).trim();
+            } else {
+                forumText = line;
             }
+        } else {
+            forumText = afterForum;
         }
     }
+
+    // 如果论坛文本中还包含777前缀格式的内容，提取出来
+    if (forumText && /777的/.test(forumText)) {
+        const declLines = forumText.match(/^.*777的[^\n]*/gm);
+        if (declLines) {
+            declText = declLines.join('\n');
+            forumText = forumText.replace(/^.*777的[^\n]*/gm, '').trim();
+        }
+    }
+
+    document.getElementById('f-forum').value = forumText;
     if (declText) document.getElementById('f-declaration').value = declText;
 
     // Show edit section
