@@ -1569,6 +1569,7 @@ async function parseText() {
     //    微信提取的文字常把所有内容压成一行（换行丢失）
     //    在关键字前插入换行，让后续正则正常工作
     //    注意：必须先匹配"新编赞美"（4字）再匹配"赞美"（2字），否则会截断
+    //    "赞美"的lookbehind必须排除"新编"前缀，否则"新编赞美"会被拆成两行
     const kwLine = raw.replace(/\n/g, ' '); // 合并为一行检测
     const sectionKws = ['赞美', '诗篇', '新编赞美', '论坛', '题目'];
     const kwCount = sectionKws.filter(kw => kwLine.includes(kw)).length;
@@ -1577,7 +1578,7 @@ async function parseText() {
     if (kwCount >= 2 && actualLines <= kwCount + 5) {
         raw = raw
             .replace(/(?<!\n)(?=新编赞美)/g, '\n')
-            .replace(/(?<!\n)(?=赞美)/g, '\n')
+            .replace(/(?<!\n)(?<!新编)(?=赞美)/g, '\n')
             .replace(/(?<!\n)(?=诗篇)/g, '\n')
             .replace(/(?<!\n)(?=论坛)/g, '\n')
             .replace(/(?<!\n)(?=题目)/g, '\n')
