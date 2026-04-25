@@ -1617,8 +1617,8 @@ async function parseText() {
         document.getElementById('f-praise2').value = (songs[1] || '').trim();
     }
 
-    // 4. Psalm number: "诗篇:23篇" or "诗篇\n:23篇" or "诗篇\n:\n23篇"
-    const psalmMatch = raw.match(/诗篇\s*[：:]\s*(\d+)/);
+    // 4. Psalm number: "诗篇:23篇" / "诗篇:23" / "诗篇23篇" / "诗篇 23篇"（无冒号也兼容）
+    const psalmMatch = raw.match(/诗篇\s*[：:，,]?\s*(\d+)/);
     if (psalmMatch) document.getElementById('f-psalm').value = psalmMatch[1].trim();
 
     // 5. Hymn numbers: "新编赞美:277，337" (跨行也匹配，支持冒号或逗号)
@@ -1631,10 +1631,10 @@ async function parseText() {
         document.getElementById('f-hymn2').value = (nums[1] || '').trim();
     }
 
-    // 6. Forum: everything after "论坛(提问):" or "论坛:" until 777 or end (多行匹配)
-    const forumMatch = raw.match(/论坛\s*(?:[（(]提问[）)])?\s*[：:]\s*([\s\S]*?)(?=\n\s*\n\s*777|\n777|$)/);
+    // 6. Forum: everything after "论坛" keyword until 777 or end of text
+    //    支持格式："论坛:内容" / "论坛 内容" / "论坛(提问):内容"
+    const forumMatch = raw.match(/论坛\s*(?:[（(]提问[）)])?\s*[：:\s]\s*([\s\S]*?)(?=\n\s*777|$)/);
     if (forumMatch) {
-        // Merge lines, keep separate questions on different lines
         const forumText = forumMatch[1].trim().replace(/([?？])\s*\n/g, '$1\n');
         document.getElementById('f-forum').value = forumText;
     }
