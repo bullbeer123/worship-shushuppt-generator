@@ -1139,20 +1139,50 @@ async function prefetchAudioInBackground(remoteUrl, onStatus) {
     } catch (e) {}
 
     // 在后台下载
-    if (onStatus) onStatus('downloading');
+    if (onStatus) onStatus('downloading', 0);
     try {
         console.log('后台预下载音频:', url.substring(0, 60) + '...');
         const proxyUrl = CORS_PROXY_URL + encodeURIComponent(url);
         const resp = await fetch(proxyUrl);
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const blob = await resp.blob();
-        if (blob.size > 1000) {
-            const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
-            await cacheAudio(url, audioBlob);
-            console.log('音频缓存成功:', url.substring(0, 60), blob.size + ' bytes');
-            if (onStatus) onStatus('cached');
+
+        // 尝试读取 Content-Length 以显示进度
+        const contentLength = resp.headers.get('Content-Length');
+        const total = contentLength ? parseInt(contentLength) : 0;
+
+        if (total > 0 && resp.body) {
+            // 逐块读取，计算进度
+            const reader = resp.body.getReader();
+            const chunks = [];
+            let received = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                received += value.length;
+                const pct = Math.round((received / total) * 100);
+                if (onStatus) onStatus('downloading', pct);
+            }
+            const blob = new Blob(chunks);
+            if (blob.size > 1000) {
+                const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+                await cacheAudio(url, audioBlob);
+                console.log('音频缓存成功:', url.substring(0, 60), blob.size + ' bytes');
+                if (onStatus) onStatus('cached');
+            } else {
+                if (onStatus) onStatus('failed');
+            }
         } else {
-            if (onStatus) onStatus('failed');
+            // 无 Content-Length，直接读取整体
+            const blob = await resp.blob();
+            if (blob.size > 1000) {
+                const audioBlob = new Blob([blob], { type: 'audio/mpeg' });
+                await cacheAudio(url, audioBlob);
+                console.log('音频缓存成功:', url.substring(0, 60), blob.size + ' bytes');
+                if (onStatus) onStatus('cached');
+            } else {
+                if (onStatus) onStatus('failed');
+            }
         }
     } catch (e) {
         console.warn('音频预下载失败:', e.message);
@@ -2012,9 +2042,10 @@ function _applyAudioToField(type, audioUrl, songTitle) {
     audioFiles[type] = { url: ensureHttps(audioUrl), name: songTitle + '.mp3', isRemote: true };
     const nameEl = document.getElementById('audio-' + type + '-name');
     if (nameEl) {
-        nameEl.textContent = '🎵 ' + songTitle + ' ⏳缓存中…';
-        prefetchAudioInBackground(audioUrl, (state) => {
-            if (state === 'cached') nameEl.textContent = '🎵 ' + songTitle + ' ✅已缓存';
+        nameEl.textContent = '🎵 ' + songTitle + ' ⏳0%…';
+        prefetchAudioInBackground(audioUrl, (state, pct) => {
+            if (state === 'downloading') nameEl.textContent = '🎵 ' + songTitle + ' ⏳' + (pct > 0 ? pct + '%…' : '下载中…');
+            else if (state === 'cached') nameEl.textContent = '🎵 ' + songTitle + ' ✅已缓存';
             else if (state === 'failed') nameEl.textContent = '🎵 ' + songTitle + ' ⚠️缓存失败';
         });
     }
@@ -2484,7 +2515,9 @@ async function updateAudioForSlide() {
         // If this is a different audio key, switch to it
         if (!currentAudio || currentAudio.key !== s.audioKey) {
             stopAudio();
-            const audioUrl = ensureHttps(info.url);
+            const rawUrl = info.url;
+            const isLocalBlob = rawUrl && rawUrl.startsWith('blob:');
+            const audioUrl = isLocalBlob ? rawUrl : ensureHttps(rawUrl);
             const audio = new Audio();
             currentAudio = { key: s.audioKey, audio: audio, name: info.name };
 
@@ -2492,14 +2525,8 @@ async function updateAudioForSlide() {
             btn.textContent = '⏳ 准备中...';
             btn.disabled = true;
 
-            // 先从缓存加载，缓存未命中时实时通过代理下载
-            loadAudioWithCache(audioUrl).then(({ blobUrl, fromCache }) => {
-                if (!currentAudio || currentAudio.key !== s.audioKey) {
-                    URL.revokeObjectURL(blobUrl);
-                    return; // 用户已切换幻灯片
-                }
-                currentAudio.blobUrl = blobUrl;
-
+            function _attachAudioAndPlay(srcUrl, fromCache) {
+                if (!currentAudio || currentAudio.key !== s.audioKey) return;
                 audio.addEventListener('timeupdate', () => {
                     const cur = audio.currentTime, dur = audio.duration || 0;
                     document.getElementById('audio-time').textContent = formatTime(cur) + ' / ' + formatTime(dur);
@@ -2517,17 +2544,29 @@ async function updateAudioForSlide() {
                     btn.disabled = false;
                     btn.textContent = '⚠️ 播放失败';
                 });
-                audio.src = blobUrl;
-                if (!fromCache) {
-                    console.log('实时下载完成，开始播放');
-                }
-            }).catch(err => {
-                console.error('音频加载失败:', err.message);
-                if (currentAudio && currentAudio.key === s.audioKey) {
-                    btn.disabled = false;
-                    btn.textContent = '⚠️ 播放失败';
-                }
-            });
+                audio.src = srcUrl;
+            }
+
+            if (isLocalBlob) {
+                // 本地上传的音频直接使用 blob URL，不走缓存代理
+                _attachAudioAndPlay(audioUrl, true);
+            } else {
+                // 远程音频：先从缓存加载，缓存未命中时实时通过代理下载
+                loadAudioWithCache(audioUrl).then(({ blobUrl, fromCache }) => {
+                    if (!currentAudio || currentAudio.key !== s.audioKey) {
+                        URL.revokeObjectURL(blobUrl);
+                        return; // 用户已切换幻灯片
+                    }
+                    currentAudio.blobUrl = blobUrl;
+                    _attachAudioAndPlay(blobUrl, fromCache);
+                }).catch(err => {
+                    console.error('音频加载失败:', err.message);
+                    if (currentAudio && currentAudio.key === s.audioKey) {
+                        btn.disabled = false;
+                        btn.textContent = '⚠️ 播放失败';
+                    }
+                });
+            }
         }
     } else {
         bar.classList.remove('show');
@@ -2720,11 +2759,12 @@ function restoreLastRecord() {
                 audioFiles[key] = { url: ensureHttps(info.url), name: info.name, isRemote: true };
                 const nameEl = document.getElementById('audio-' + key + '-name');
                 if (nameEl) {
-                    nameEl.textContent = '🎵 ' + info.name + ' ⏳缓存中…';
+                    nameEl.textContent = '🎵 ' + info.name + ' ⏳0%…';
                     // 恢复后自动预下载，完成后更新状态
                     (function(el, n, u) {
-                        prefetchAudioInBackground(u, (state) => {
-                            if (state === 'cached') el.textContent = '🎵 ' + n + ' ✅已缓存';
+                        prefetchAudioInBackground(u, (state, pct) => {
+                            if (state === 'downloading') el.textContent = '🎵 ' + n + ' ⏳' + (pct > 0 ? pct + '%…' : '下载中…');
+                            else if (state === 'cached') el.textContent = '🎵 ' + n + ' ✅已缓存';
                             else if (state === 'failed') el.textContent = '🎵 ' + n + ' ⚠️缓存失败';
                         });
                     })(nameEl, info.name, info.url);
@@ -2833,9 +2873,13 @@ function adjustLine(dir) {
 
 document.addEventListener('keydown', e => {
     if (!document.getElementById('slideshow-overlay').classList.contains('show')) return;
-    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); nextSlide(); }
-    else if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); prevSlide(); }
-    else if (e.key === 'Escape') closeSlideshow();
+    // 下一页：右箭头 / 下箭头 / 空格 / Enter / PageDown（激光笔常用）
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ' || e.key === 'Enter' || e.key === 'PageDown') {
+        e.preventDefault(); nextSlide();
+    // 上一页：左箭头 / 上箭头 / Backspace / PageUp（激光笔常用）
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'Backspace' || e.key === 'PageUp') {
+        e.preventDefault(); prevSlide();
+    } else if (e.key === 'Escape') closeSlideshow();
 });
 
 // ============ 移动端触摸滑动翻页 ============
