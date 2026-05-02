@@ -276,6 +276,17 @@
         /* 重置按钮 - 灰色（用更亮的色） */
         .side-btn-reset { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); color: #e2d1f0; }
         .side-btn-reset:hover { background: rgba(255,255,255,0.2); }
+        /* 自定义页面按钮 - 橙色 */
+        .side-btn-custom { background: rgba(251,146,60,0.2); border: 1px solid rgba(251,146,60,0.5); color: #fb923c; }
+        .side-btn-custom:hover { background: rgba(251,146,60,0.35); }
+        /* 高亮闪烁动画 */
+        @keyframes cp-highlight {
+            0%, 100% { border-color: rgba(245,215,110,0.45); background: rgba(245,215,110,0.08); }
+            50% { border-color: #F5D76E; background: rgba(245,215,110,0.25); box-shadow: 0 0 20px rgba(245,215,110,0.3); }
+        }
+        .cp-item.highlight {
+            animation: cp-highlight 0.8s ease-in-out 3;
+        }
         /* 手机端底部横排 */
         @media (max-width: 768px) {
             .side-panel {
@@ -1177,6 +1188,11 @@
         <span class="side-icon">💾</span>
         <span class="side-label" id="save-btn-label">保存</span>
         <span class="side-hint">防丢失</span>
+    </button>
+    <button class="side-btn side-btn-custom" onclick="quickCustomPage()" id="btn-side-custom">
+        <span class="side-icon">📄</span>
+        <span class="side-label">自定义</span>
+        <span class="side-hint">增删图文</span>
     </button>
     <button class="side-btn side-btn-generate" onclick="buildSlideshow()">
         <span class="side-icon">✨</span>
@@ -3375,6 +3391,33 @@ function updateCPPosition(index, posId) {
     if (customSlides[index]) {
         customSlides[index].insertAfter = posId;
         showToast('✅ 插入位置已更新');
+    }
+}
+
+// 侧边栏「自定义」按钮：一键跳转到自定义页面区
+function quickCustomPage() {
+    if (customSlides.length === 0) {
+        // 没有自定义页面 → 自动添加并打开编辑器
+        addCustomPage();
+        return;
+    }
+    // 有页面 → 确保编辑区可见，滚动到自定义页面区并高亮
+    document.getElementById('edit-section').style.display = 'block';
+    const section = document.querySelector('.custom-page-section');
+    if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // 高亮第一个页面条目
+        setTimeout(() => {
+            const firstItem = document.querySelector('.cp-item');
+            if (firstItem) {
+                firstItem.classList.add('highlight');
+                setTimeout(() => firstItem.classList.remove('highlight'), 2500);
+            }
+            // 打开最后一个页面的编辑器（方便直接编辑）
+            if (customSlides.length > 0) {
+                openCustomEditor(customSlides.length - 1);
+            }
+        }, 500);
     }
 }
 
