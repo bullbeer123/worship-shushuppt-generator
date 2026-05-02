@@ -738,6 +738,200 @@
         .example-box.show { display: block; }
 
 
+        /* ======= Custom Page Manager ======= */
+        .custom-page-section { margin-top: 24px; }
+        .custom-page-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+        }
+        .custom-page-header .title {
+            font-size: 19px; font-weight: bold; color: #F5D76E;
+        }
+        .custom-page-header .count {
+            font-size: 14px; color: #8b7a96;
+        }
+        .cp-add-btn {
+            padding: 10px 20px; border: 2px dashed rgba(245,215,110,0.4);
+            border-radius: 10px; background: rgba(245,215,110,0.08);
+            color: #F5D76E; font-size: 15px; cursor: pointer;
+            font-family: inherit; transition: all 0.3s;
+        }
+        .cp-add-btn:hover { background: rgba(245,215,110,0.2); border-color: rgba(245,215,110,0.7); }
+        .cp-list { display: flex; flex-direction: column; gap: 6px; }
+        .cp-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px; border-radius: 10px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+        }
+        .cp-item .name {
+            font-size: 15px; color: #d4a5e8; font-weight: 500; cursor: pointer;
+        }
+        .cp-item .name:hover { color: #c084fc; }
+        .cp-item .actions { display: flex; gap: 4px; }
+        .cp-item .actions button {
+            width: 32px; height: 32px; border: none; border-radius: 6px;
+            cursor: pointer; font-size: 14px; transition: all 0.2s;
+            background: rgba(255,255,255,0.08); color: #d4a5e8;
+            font-family: inherit; display: flex; align-items: center; justify-content: center;
+        }
+        .cp-item .actions button:hover { background: rgba(255,255,255,0.2); }
+        .cp-item .actions .del-btn:hover { background: rgba(239,68,68,0.3); color: #fca5a5; }
+        .cp-item .actions .edit-btn:hover { background: rgba(192,132,252,0.3); color: #d8b4fe; }
+
+        /* ======= Drag Editor Overlay ======= */
+        .cp-editor-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8); z-index: 4000;
+            flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .cp-editor-overlay.show { display: flex; }
+        .cp-editor-window {
+            background: linear-gradient(135deg, #2c041d, #5b1a6e);
+            border-radius: 16px; border: 1px solid rgba(255,255,255,0.15);
+            width: 100%; max-width: 900px;
+            display: flex; flex-direction: column;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+        }
+        .cp-editor-toolbar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.1);
+            flex-wrap: wrap;
+        }
+        .cp-editor-toolbar .title {
+            font-size: 16px; color: #F5D76E; font-weight: bold; margin-right: auto;
+        }
+        .cp-editor-toolbar button {
+            padding: 8px 14px; border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px; background: rgba(255,255,255,0.08);
+            color: #fff; font-size: 14px; cursor: pointer;
+            font-family: inherit; transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .cp-editor-toolbar button:hover { background: rgba(255,255,255,0.18); }
+        .cp-editor-toolbar .close-btn { border-color: #ef4444; color: #ef4444; }
+        .cp-editor-toolbar .close-btn:hover { background: rgba(239,68,68,0.2); }
+        .cp-editor-toolbar .del-el-btn { border-color: #ef4444; color: #ef4444; display: none; }
+        .cp-editor-toolbar .del-el-btn.show { display: inline-flex; }
+
+        /* 选中元素属性工具栏 */
+        .cp-prop-bar {
+            display: none; align-items: center; gap: 8px;
+            padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03); flex-wrap: wrap;
+        }
+        .cp-prop-bar.show { display: flex; }
+        .cp-prop-bar label { color: #8b7a96; font-size: 13px; white-space: nowrap; }
+        .cp-prop-bar input, .cp-prop-bar select {
+            padding: 4px 8px; border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 4px; background: rgba(255,255,255,0.08);
+            color: #fff; font-size: 13px; font-family: inherit; outline: none;
+        }
+        .cp-prop-bar input[type="color"] {
+            width: 32px; height: 28px; padding: 2px; cursor: pointer;
+        }
+        .cp-prop-bar input[type="number"] { width: 50px; }
+        .cp-prop-bar button {
+            padding: 4px 10px; border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px; background: rgba(255,255,255,0.08);
+            color: #fff; font-size: 13px; cursor: pointer;
+            font-family: inherit;
+        }
+        .cp-prop-bar button:hover { background: rgba(255,255,255,0.18); }
+        .cp-prop-bar button.active { background: rgba(192,132,252,0.3); border-color: #c084fc; }
+
+        /* 编辑画布 */
+        .cp-canvas-wrap {
+            flex: 1; min-height: 0;
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px; overflow: hidden;
+        }
+        .cp-canvas {
+            width: 100%; max-width: 800px;
+            aspect-ratio: 16 / 9;
+            background: #5B1A6E;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+            cursor: default;
+            user-select: none;
+        }
+        .cp-element {
+            position: absolute;
+            cursor: move;
+            border: 2px solid transparent;
+            transition: border-color 0.15s;
+            box-sizing: border-box;
+            overflow: hidden;
+            min-width: 30px; min-height: 20px;
+        }
+        .cp-element:hover { border-color: rgba(255,255,255,0.2); }
+        .cp-element.selected {
+            border-color: #c084fc;
+            box-shadow: 0 0 0 1px rgba(192,132,252,0.3);
+        }
+        .cp-element .el-content {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: none;
+            word-break: break-word;
+        }
+        .cp-element .el-content img {
+            max-width: 100%; max-height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+        }
+        /* Resize handles */
+        .cp-element .resize-handle {
+            position: absolute;
+            width: 10px; height: 10px;
+            background: #c084fc;
+            border: 1px solid #fff;
+            border-radius: 2px;
+            z-index: 10;
+            display: none;
+        }
+        .cp-element.selected .resize-handle { display: block; }
+        .resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
+        .resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
+        .resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+        .resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+
+        /* 双击编辑文字 */
+        .cp-element .text-editor {
+            display: none;
+            width: 100%; height: 100%;
+            border: none; outline: none;
+            background: rgba(0,0,0,0.3);
+            color: inherit; font-size: inherit;
+            font-family: inherit; text-align: inherit;
+            resize: none; padding: 8px;
+            box-sizing: border-box;
+            position: absolute; top: 0; left: 0;
+        }
+        .cp-element.editing .text-editor { display: block; }
+        .cp-element.editing .el-content { display: none; }
+        .cp-element.editing { border-color: #F5D76E; }
+
+        /* 空画布提示 */
+        .cp-canvas-empty {
+            position: absolute;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: rgba(255,255,255,0.3);
+            font-size: 18px; text-align: center;
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+            .cp-editor-overlay { padding: 8px; }
+            .cp-editor-toolbar { padding: 8px 10px; font-size: 13px; }
+            .cp-editor-toolbar button { font-size: 12px; padding: 6px 10px; }
+            .cp-prop-bar { padding: 6px 10px; }
+            .cp-prop-bar label { font-size: 12px; }
+            .cp-canvas-wrap { padding: 8px; }
+        }
     </style>
 </head>
 <body>
@@ -944,6 +1138,20 @@
                 <input type="file" id="img-ending" accept="image/*" style="display:none" onchange="onEndingImgSelected(this)">
                 <button class="fetch-btn" onclick="document.getElementById('img-ending').click()">📁 选择结束页图片</button>
                 <div id="img-ending-preview" style="margin-top:8px;"></div>
+            </div>
+        </div>
+
+        <!-- ======= 自定义页面管理 ======= -->
+        <hr class="section-divider">
+        <div class="custom-page-section">
+            <div class="custom-page-header">
+                <span class="title">📄 自定义页面</span>
+                <span class="count" id="cp-count">当前共 0 页</span>
+            </div>
+            <button class="cp-add-btn" onclick="addCustomPage()" style="margin-bottom:12px;">➕ 添加自定义页面</button>
+            <div class="cp-list" id="cp-list"></div>
+            <div style="color:#8b7a96;font-size:13px;margin-top:8px;line-height:1.5;">
+                💡 添加自定义页面后，可拖拽编辑文字和图片；每页可选择插入位置（开篇/赞美/经文/信仰告白/证道/论坛/末尾）
             </div>
         </div>
 
@@ -2172,12 +2380,22 @@ function buildSlides(data) {
     const slides = [];
     const tocSections = []; // { name, slideIndex }
 
+    // Helper: insert custom pages at a given anchor point
+    const insertCP = (anchor) => {
+        const pages = buildCustomSlidesAt(anchor);
+        for (const cs of pages) {
+            slides.push(cs);
+            tocSections.push({ name: cs.section, slideIndex: slides.length - 1 });
+        }
+    };
+
     // 1. Cover — 上周内容
     slides.push({ type: 'cover', data, section: '开篇' });
     tocSections.push({ name: '开篇', slideIndex: 0 });
 
-    // 1.5 礼拜日期 + 题目
+    // 1.5 礼拜日期 + 题目 + 自定义页面（开篇之后）
     slides.push({ type: 'date-title', data });
+    insertCP('开篇');
 
     // 2. 献上赞美 — each song: title slide + lyrics pages
     [['praise1', 'praise1Lyrics', '献上赞美'], ['praise2', 'praise2Lyrics', '献上赞美']].forEach(([nameKey, lyricsKey, label]) => {
@@ -2193,6 +2411,8 @@ function buildSlides(data) {
             }
         }
     });
+    // 自定义页面（赞美之后）
+    insertCP('赞美');
 
     // 3. 请起立 + 约4:24 (FIXED)
     slides.push({ type: 'stand-up-fixed' });
@@ -2211,6 +2431,8 @@ function buildSlides(data) {
         slides.push({ type: 'psalm-title', label: psalmLabel, section: psalmLabel });
         tocSections.push({ name: psalmLabel, slideIndex: slides.length - 1 });
     }
+    // 自定义页面（经文之后）
+    insertCP('经文');
 
     // 5. 新编赞美第1首 — title + lyrics pages
     if (data.hymn1) {
@@ -2231,6 +2453,8 @@ function buildSlides(data) {
     for (const line of FIXED.creed) {
         slides.push({ type: 'creed', text: line });
     }
+    // 自定义页面（信仰告白之后）
+    insertCP('信仰告白');
 
     // 7. 新编赞美第2首 — title + lyrics pages
     if (data.hymn2) {
@@ -2263,17 +2487,17 @@ function buildSlides(data) {
         const label = '牧师证道 — 第' + (idx === 0 ? '一' : '二') + '讲';
         const lines = sermon.split('\n').filter(l => l.trim());
         const firstLine = lines[0] || '';
-        // Check if there's fetched verse content (after the first line)
         const verseLines = lines.length > 1 ? lines.slice(1) : [];
         slides.push({ type: 'sermon', ref: label, text: firstLine, section: label });
         tocSections.push({ name: label, slideIndex: slides.length - 1 });
         if (verseLines.length > 0) {
-            // One verse per page
             for (const verse of verseLines) {
                 slides.push({ type: 'sermon-verse', label: label, text: verse });
             }
         }
     });
+    // 自定义页面（证道之后）
+    insertCP('证道');
 
     // 10. 欢迎赞美 24 (FIXED - 赞美耶稣诗集)
     slides.push({ type: 'hymn', label: '欢迎赞美', text: FIXED.welcome + ' ' + FIXED.welcomeName, section: '欢迎赞美' });
@@ -2293,9 +2517,11 @@ function buildSlides(data) {
     slides.push({ type: 'simple', title: '牧师祝福祷告', section: '祝福祷告' });
     tocSections.push({ name: '祝福祷告', slideIndex: slides.length - 1 });
 
-    // 13. 论坛分享
+    // 13. 论坛分享 + 自定义页面（论坛之后 / 末尾）
     slides.push({ type: 'forum', data, section: '论坛分享' });
     tocSections.push({ name: '论坛分享', slideIndex: slides.length - 1 });
+    insertCP('论坛');  // 论坛之后
+    insertCP('末尾');  // 末尾（以马内利前）
 
     // 14. 以马内利
     slides.push({ type: 'ending', section: '以马内利' });
@@ -2428,6 +2654,10 @@ function renderSlide() {
         case 'forum':
             html = `<div class="s-title">论坛分享</div>${s.data.forum ? '<div class="s-body">' + esc(s.data.forum) + '</div>' : ''}`;
             break;
+        case 'custom': {
+            html = renderCustomPageHTML(s.elements);
+            break;
+        }
         case 'ending':
             html = `<div class="s-title" style="font-size:calc(clamp(36px,6vw,72px) * var(--fs-scale));text-shadow:0 2px 8px rgba(0,0,0,0.6);">以马内利</div>`;
             const endBgUrl = endingImgUrl || DEFAULT_ENDING_BG_DATA;
@@ -2668,6 +2898,8 @@ function saveRecord(data) {
             pasteText: document.getElementById('paste-area').value,
             audioInfo: audioInfo,
             bibleInfo: bibleInfo,
+            customSlides: customSlides, // 保存自定义页面
+            nextElId: nextElId,
         };
         localStorage.setItem(RECORD_KEY, JSON.stringify(record));
     } catch (e) { /* storage full or unavailable */ }
@@ -2790,6 +3022,13 @@ function restoreLastRecord() {
             restoredBibleCount++;
         }
 
+        // 恢复自定义页面
+        if (record.customSlides && Array.isArray(record.customSlides)) {
+            customSlides = record.customSlides;
+            nextElId = record.nextElId || 1;
+            renderCPList();
+        }
+
         document.getElementById('edit-section').style.display = 'block';
         document.getElementById('edit-section').scrollIntoView({ behavior: 'smooth' });
         showToast('✅ 已恢复上次记录');
@@ -2835,6 +3074,18 @@ function showAlertDialog(title, message) {
 // Check on page load
 window.addEventListener('DOMContentLoaded', () => {
     checkRestoreBar();
+    // 尝试自动恢复自定义页面（不依赖点击恢复按钮）
+    try {
+        const raw = localStorage.getItem(RECORD_KEY);
+        if (raw) {
+            const record = JSON.parse(raw);
+            if (record.customSlides && Array.isArray(record.customSlides)) {
+                customSlides = record.customSlides;
+                nextElId = record.nextElId || 1;
+                renderCPList();
+            }
+        }
+    } catch (e) {}
     // ★ 启动时预热：字典中所有歌曲URL后台预下载（离线缓存）
     setTimeout(() => {
         const dict = getSongUrlDict();
@@ -2976,6 +3227,10 @@ async function generatePPT() {
                     secTitle(slide, '论坛分享');
                     if (s.data.forum) slide.addText(s.data.forum, { x: 1, y: 2.0, w: 11.333, h: 4.5, fontSize: 24, color: W, align: 'center', valign: 'middle', fontFace: 'Microsoft YaHei', lineSpacing: 38 });
                     break;
+                case 'custom': {
+                    generateCustomPPT(slide, s.elements, BG, W, G);
+                    break;
+                }
                 case 'ending': {
                     slide.background = { path: pptEndingImg || ensureHttps('https://oss.top237.top/2026/02/13/698f201f1dcea.png') };
                     slide.addText('以马内利', { x: 0, y: 0, w: 13.333, h: 7.5, fontSize: 60, color: W, align: 'center', valign: 'middle', bold: true, fontFace: 'Microsoft YaHei', shadow: { type: 'outer', color: '000000', blur: 8, offset: 2, angle: 45, opacity: 0.5 } });
@@ -3037,6 +3292,10 @@ function resetAll() {
     document.getElementById('img-ending-preview').innerHTML = '';
     // Clear song cache for fresh search
     songCache = null;
+    // Clear custom pages
+    customSlides = [];
+    nextElId = 1;
+    renderCPList();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -3047,7 +3306,562 @@ function showToast(msg, isError = false) {
     setTimeout(() => toast.classList.add('show'), 10);
     setTimeout(() => toast.classList.remove('show'), 3000);
 }
+
+// ============ Custom Pages Management ============
+const CP_POSITIONS = [
+    { id: '开篇', label: '开篇之后' },
+    { id: '赞美', label: '赞美之后' },
+    { id: '经文', label: '经文之后' },
+    { id: '信仰告白', label: '信仰告白之后' },
+    { id: '证道', label: '证道之后' },
+    { id: '论坛', label: '论坛之后（默认）' },
+    { id: '末尾', label: '末尾（以马内利前）' },
+];
+
+let customSlides = []; // Array of { id, insertAfter, elements: [...] }
+let cpEditIndex = -1;
+let cpSelectedElId = null;
+let cpDragState = null;
+let nextElId = 1;
+
+// Render the custom pages list in the management UI
+function renderCPList() {
+    const list = document.getElementById('cp-list');
+    if (customSlides.length === 0) {
+        list.innerHTML = '<div style="color:#8b7a96;font-size:14px;padding:10px;">暂无自定义页面，点击上方按钮添加</div>';
+        document.getElementById('cp-count').textContent = '当前共 0 页';
+        return;
+    }
+    document.getElementById('cp-count').textContent = '当前共 ' + customSlides.length + ' 页';
+    list.innerHTML = customSlides.map((cs, i) => {
+        const elCount = cs.elements.length;
+        const posOptions = CP_POSITIONS.map(p =>
+            `<option value="${p.id}" ${(cs.insertAfter||'论坛') === p.id ? 'selected' : ''}>${p.label}</option>`
+        ).join('');
+        return `<div class="cp-item">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;min-width:0;">
+                <span class="name" onclick="openCustomEditor(${i})">📄 自定义 #${i+1} <span style="color:#8b7a96;font-size:12px;">(${elCount}个元素)</span></span>
+                <select style="padding:4px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.08);color:#d4a5e8;font-size:13px;font-family:inherit;outline:none;cursor:pointer;"
+                    onchange="updateCPPosition(${i}, this.value)" title="插入位置">
+                    ${posOptions}
+                </select>
+            </div>
+            <span class="actions">
+                <button onclick="moveCP(${i},-1)" ${i===0?'disabled style="opacity:0.3"':''}>↑</button>
+                <button onclick="moveCP(${i},1)" ${i===customSlides.length-1?'disabled style="opacity:0.3"':''}>↓</button>
+                <button class="edit-btn" onclick="openCustomEditor(${i})">✏️</button>
+                <button class="del-btn" onclick="deleteCP(${i})">🗑️</button>
+            </span>
+        </div>`;
+    }).join('');
+}
+
+function addCustomPage() {
+    customSlides.push({ id: 'cs_' + Date.now(), insertAfter: '论坛', elements: [] });
+    renderCPList();
+    // Auto-open editor for the new page
+    openCustomEditor(customSlides.length - 1);
+    showToast('✅ 已添加自定义页面');
+}
+
+function deleteCP(index) {
+    if (!confirm('确定删除自定义页面 #' + (index+1) + ' 吗？')) return;
+    customSlides.splice(index, 1);
+    renderCPList();
+    showToast('已删除');
+}
+
+function updateCPPosition(index, posId) {
+    if (customSlides[index]) {
+        customSlides[index].insertAfter = posId;
+        showToast('✅ 插入位置已更新');
+    }
+}
+
+function moveCP(index, dir) {
+    const newIndex = index + dir;
+    if (newIndex < 0 || newIndex >= customSlides.length) return;
+    const temp = customSlides[index];
+    customSlides[index] = customSlides[newIndex];
+    customSlides[newIndex] = temp;
+    renderCPList();
+}
+
+// ============ Custom Page Drag Editor ============
+function openCustomEditor(index) {
+    cpEditIndex = index;
+    cpSelectedElId = null;
+    const cs = customSlides[index];
+    document.getElementById('cp-editor-title').textContent = '编辑自定义页面 #' + (index+1);
+    document.getElementById('cp-editor-overlay').classList.add('show');
+    document.getElementById('side-panel').style.display = 'none';
+    document.getElementById('cp-prop-bar').classList.remove('show');
+    document.getElementById('cp-del-el-btn').classList.remove('show');
+    renderCanvas(cs);
+}
+
+function closeCustomEditor() {
+    document.getElementById('cp-editor-overlay').classList.remove('show');
+    document.getElementById('side-panel').style.display = '';
+    cpEditIndex = -1;
+    cpSelectedElId = null;
+    cpDragState = null;
+}
+
+function renderCanvas(cs) {
+    const canvas = document.getElementById('cp-canvas');
+    const empty = document.getElementById('cp-canvas-empty');
+    if (!cs || cs.elements.length === 0) {
+        empty.style.display = 'block';
+        // Remove only element children (not empty)
+        canvas.querySelectorAll('.cp-element').forEach(el => el.remove());
+        return;
+    }
+    empty.style.display = 'none';
+
+    // Remove old elements but keep empty hint
+    canvas.querySelectorAll('.cp-element').forEach(el => el.remove());
+
+    const rect = canvas.getBoundingClientRect();
+    const cw = rect.width, ch = rect.height;
+
+    cs.elements.forEach(el => {
+        const div = document.createElement('div');
+        div.className = 'cp-element' + (el.id === cpSelectedElId ? ' selected' : '');
+        div.dataset.elId = el.id;
+        div.style.left = (el.x * 100) + '%';
+        div.style.top = (el.y * 100) + '%';
+        div.style.width = (el.w * 100) + '%';
+        div.style.height = (el.h * 100) + '%';
+
+        if (el.type === 'text') {
+            const content = document.createElement('div');
+            content.className = 'el-content';
+            content.style.fontSize = el.fontSize + 'px';
+            content.style.color = el.color;
+            content.style.fontWeight = el.bold ? 'bold' : 'normal';
+            content.style.textAlign = el.align || 'center';
+            content.textContent = el.content || '双击编辑文字';
+            div.appendChild(content);
+
+            // Text editor (hidden, shown on double click)
+            const editor = document.createElement('textarea');
+            editor.className = 'text-editor';
+            editor.value = el.content || '';
+            editor.style.fontSize = el.fontSize + 'px';
+            editor.style.color = el.color;
+            editor.style.fontWeight = el.bold ? 'bold' : 'normal';
+            editor.style.textAlign = el.align || 'center';
+            editor.onmousedown = e => e.stopPropagation();
+            editor.onblur = function() {
+                div.classList.remove('editing');
+                content.textContent = this.value || '双击编辑文字';
+                // Update data model
+                const data = customSlides[cpEditIndex];
+                if (data) {
+                    const dataEl = data.elements.find(e => e.id === el.id);
+                    if (dataEl) dataEl.content = this.value || '';
+                }
+            };
+            div.appendChild(editor);
+
+            // Double click to edit
+            div.ondblclick = function(e) {
+                if (el.type !== 'text') return;
+                div.classList.add('editing');
+                const ta = div.querySelector('.text-editor');
+                if (ta) { ta.focus(); ta.select(); }
+            };
+        } else if (el.type === 'image') {
+            const content = document.createElement('div');
+            content.className = 'el-content';
+            if (el.imageData) {
+                const img = document.createElement('img');
+                img.src = el.imageData;
+                img.draggable = false;
+                content.appendChild(img);
+            } else {
+                content.textContent = '🖼️ 图片';
+                content.style.fontSize = '20px';
+                content.style.color = 'rgba(255,255,255,0.5)';
+            }
+            div.appendChild(content);
+        }
+
+        // Resize handles
+        ['nw','ne','sw','se'].forEach(pos => {
+            const h = document.createElement('div');
+            h.className = 'resize-handle ' + pos;
+            h.dataset.pos = pos;
+            h.onmousedown = e => { e.stopPropagation(); startResize(e, el.id, pos); };
+            h.ontouchstart = e => { e.stopPropagation(); startResizeTouch(e, el.id, pos); };
+            div.appendChild(h);
+        });
+
+        // Mousedown for select + drag
+        div.onmousedown = function(e) {
+            if (e.target.closest('.resize-handle')) return;
+            selectElement(el.id);
+            startDrag(e, el.id);
+        };
+        div.ontouchstart = function(e) {
+            if (e.target.closest('.resize-handle')) return;
+            selectElement(el.id);
+            // Touch drag is handled via touch events
+        };
+
+        canvas.appendChild(div);
+    });
+}
+
+// ============ Element Selection ============
+function selectElement(elId) {
+    cpSelectedElId = elId;
+    // Update visual
+    document.querySelectorAll('.cp-element').forEach(el => {
+        el.classList.toggle('selected', el.dataset.elId === elId);
+    });
+    // Show property bar
+    const bar = document.getElementById('cp-prop-bar');
+    const delBtn = document.getElementById('cp-del-el-btn');
+    if (elId && cpEditIndex >= 0) {
+        const data = customSlides[cpEditIndex];
+        const el = data && data.elements.find(e => e.id === elId);
+        if (el && el.type === 'text') {
+            bar.classList.add('show');
+            document.getElementById('cp-font-size').value = el.fontSize || 28;
+            document.getElementById('cp-color').value = el.color || '#ffffff';
+            document.getElementById('cp-bold-btn').classList.toggle('active', !!el.bold);
+            document.getElementById('cp-align').value = el.align || 'center';
+        } else {
+            bar.classList.remove('show');
+        }
+        delBtn.classList.add('show');
+    } else {
+        bar.classList.remove('show');
+        delBtn.classList.remove('show');
+    }
+}
+
+function updateSelectedProp(prop, value) {
+    if (!cpSelectedElId || cpEditIndex < 0) return;
+    const data = customSlides[cpEditIndex];
+    const el = data && data.elements.find(e => e.id === cpSelectedElId);
+    if (!el) return;
+    el[prop] = value;
+    renderCanvas(data);
+    selectElement(cpSelectedElId);
+}
+
+function toggleSelectedBold() {
+    if (!cpSelectedElId || cpEditIndex < 0) return;
+    const data = customSlides[cpEditIndex];
+    const el = data && data.elements.find(e => e.id === cpSelectedElId);
+    if (!el) return;
+    el.bold = !el.bold;
+    renderCanvas(data);
+    selectElement(cpSelectedElId);
+}
+
+function deleteSelectedElement() {
+    if (!cpSelectedElId || cpEditIndex < 0) return;
+    const data = customSlides[cpEditIndex];
+    if (!data) return;
+    data.elements = data.elements.filter(e => e.id !== cpSelectedElId);
+    cpSelectedElId = null;
+    renderCanvas(data);
+    document.getElementById('cp-prop-bar').classList.remove('show');
+    document.getElementById('cp-del-el-btn').classList.remove('show');
+}
+
+// ============ Add Elements ============
+function addTextElement() {
+    if (cpEditIndex < 0) return;
+    const data = customSlides[cpEditIndex];
+    const el = {
+        id: 'el_' + (nextElId++),
+        type: 'text',
+        x: 0.15, y: 0.3,
+        w: 0.7, h: 0.3,
+        content: '新文字框',
+        fontSize: 28,
+        color: '#ffffff',
+        bold: false,
+        align: 'center'
+    };
+    data.elements.push(el);
+    renderCanvas(data);
+    selectElement(el.id);
+}
+
+function addImageElement() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            if (cpEditIndex < 0) return;
+            const data = customSlides[cpEditIndex];
+            const el = {
+                id: 'el_' + (nextElId++),
+                type: 'image',
+                x: 0.15, y: 0.15,
+                w: 0.7, h: 0.7,
+                content: '',
+                imageData: ev.target.result,
+                fontSize: 28,
+                color: '#ffffff',
+                bold: false,
+                align: 'center'
+            };
+            data.elements.push(el);
+            renderCanvas(data);
+            selectElement(el.id);
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+// ============ Drag & Resize ============
+function startDrag(e, elId) {
+    if (cpEditIndex < 0) return;
+    const canvas = document.getElementById('cp-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const data = customSlides[cpEditIndex];
+    const el = data.elements.find(el => el.id === elId);
+    if (!el) return;
+
+    cpDragState = { type: 'move', elId, startX: e.clientX, startY: e.clientY, startEl: { ...el } };
+    e.preventDefault();
+}
+
+function startResize(e, elId, pos) {
+    if (cpEditIndex < 0) return;
+    const canvas = document.getElementById('cp-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const data = customSlides[cpEditIndex];
+    const el = data.elements.find(el => el.id === elId);
+    if (!el) return;
+
+    cpDragState = { type: 'resize', elId, pos, startX: e.clientX, startY: e.clientY, startEl: { ...el } };
+    e.preventDefault();
+}
+
+// Touch versions
+function startResizeTouch(e, elId, pos) {
+    if (cpEditIndex < 0) return;
+    const touch = e.touches[0];
+    const canvas = document.getElementById('cp-canvas');
+    const data = customSlides[cpEditIndex];
+    const el = data.elements.find(el => el.id === elId);
+    if (!el) return;
+    cpDragState = { type: 'resize', elId, pos, startX: touch.clientX, startY: touch.clientY, startEl: { ...el } };
+}
+
+document.addEventListener('mousemove', function(e) {
+    if (!cpDragState) return;
+    const canvas = document.getElementById('cp-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const cw = rect.width, ch = rect.height;
+    if (cw <= 0 || ch <= 0) return;
+    const data = customSlides[cpEditIndex];
+    if (!data) return;
+    const el = data.elements.find(el => el.id === cpDragState.elId);
+    if (!el) return;
+
+    const dx = (e.clientX - cpDragState.startX) / cw;
+    const dy = (e.clientY - cpDragState.startY) / ch;
+
+    if (cpDragState.type === 'move') {
+        el.x = Math.max(0, Math.min(1 - el.w, cpDragState.startEl.x + dx));
+        el.y = Math.max(0, Math.min(1 - el.h, cpDragState.startEl.y + dy));
+    } else if (cpDragState.type === 'resize') {
+        const se = cpDragState.startEl;
+        let nx = se.x, ny = se.y, nw = se.w, nh = se.h;
+        const pos = cpDragState.pos;
+        if (pos.includes('e')) { nw = Math.max(0.05, se.w + dx); }
+        if (pos.includes('w')) { nw = Math.max(0.05, se.w - dx); nx = Math.min(se.x + dx, se.x + se.w - 0.05); }
+        if (pos.includes('s')) { nh = Math.max(0.05, se.h + dy); }
+        if (pos.includes('n')) { nh = Math.max(0.05, se.h - dy); ny = Math.min(se.y + dy, se.y + se.h - 0.05); }
+        el.x = Math.max(0, nx);
+        el.y = Math.max(0, ny);
+        el.w = Math.min(1 - el.x, Math.max(0.05, nw));
+        el.h = Math.min(1 - el.y, Math.max(0.05, nh));
+    }
+
+    renderCanvas(data);
+    selectElement(cpDragState.elId);
+});
+
+document.addEventListener('mouseup', function() {
+    if (cpDragState) {
+        cpDragState = null;
+        // Restore prop bar if a text element is selected
+        if (cpSelectedElId && cpEditIndex >= 0) {
+            selectElement(cpSelectedElId);
+        }
+    }
+});
+
+// Touch drag support
+document.addEventListener('touchmove', function(e) {
+    if (!cpDragState) return;
+    const touch = e.touches[0];
+    const canvas = document.getElementById('cp-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const cw = rect.width, ch = rect.height;
+    if (cw <= 0 || ch <= 0) return;
+    const data = customSlides[cpEditIndex];
+    if (!data) return;
+    const el = data.elements.find(el => el.id === cpDragState.elId);
+    if (!el) return;
+
+    const dx = (touch.clientX - cpDragState.startX) / cw;
+    const dy = (touch.clientY - cpDragState.startY) / ch;
+
+    if (cpDragState.type === 'move') {
+        el.x = Math.max(0, Math.min(1 - el.w, cpDragState.startEl.x + dx));
+        el.y = Math.max(0, Math.min(1 - el.h, cpDragState.startEl.y + dy));
+    } else if (cpDragState.type === 'resize') {
+        const se = cpDragState.startEl;
+        let nx = se.x, ny = se.y, nw = se.w, nh = se.h;
+        const pos = cpDragState.pos;
+        if (pos.includes('e')) { nw = Math.max(0.05, se.w + dx); }
+        if (pos.includes('w')) { nw = Math.max(0.05, se.w - dx); nx = Math.min(se.x + dx, se.x + se.w - 0.05); }
+        if (pos.includes('s')) { nh = Math.max(0.05, se.h + dy); }
+        if (pos.includes('n')) { nh = Math.max(0.05, se.h - dy); ny = Math.min(se.y + dy, se.y + se.h - 0.05); }
+        el.x = Math.max(0, nx);
+        el.y = Math.max(0, ny);
+        el.w = Math.min(1 - el.x, Math.max(0.05, nw));
+        el.h = Math.min(1 - el.y, Math.max(0.05, nh));
+    }
+
+    renderCanvas(data);
+    selectElement(cpDragState.elId);
+    e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('touchend', function() {
+    if (cpDragState) {
+        cpDragState = null;
+        if (cpSelectedElId && cpEditIndex >= 0) {
+            selectElement(cpSelectedElId);
+        }
+    }
+});
+
+// Keyboard: delete selected element
+document.addEventListener('keydown', function(e) {
+    if (!document.getElementById('cp-editor-overlay').classList.contains('show')) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Don't delete if editing a textarea
+        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') return;
+        deleteSelectedElement();
+    }
+});
+
+// ============ Build Custom Slides into Slideshow ============
+// Build custom slide data for a given anchor position
+function buildCustomSlidesAt(anchor) {
+    return customSlides
+        .filter(cs => (cs.insertAfter || '论坛') === anchor)
+        .map((cs, i) => ({
+            type: 'custom',
+            elements: cs.elements,
+            section: '自定义'
+        }));
+}
+
+// Render custom slide elements as HTML for the slideshow player
+function renderCustomPageHTML(elements) {
+    if (!elements || elements.length === 0) return '<div class="s-body">（空白页面）</div>';
+    let html = '<div style="position:relative;width:100%;height:100%;">';
+    for (const el of elements) {
+        if (el.type === 'text') {
+            const fs = Math.round(el.fontSize * 1.4) || 28;
+            html += `<div style="position:absolute;left:${el.x*100}%;top:${el.y*100}%;width:${el.w*100}%;height:${el.h*100}%;
+                font-size:calc(clamp(14px,${fs/4}vw,${fs}px) * var(--fs-scale));
+                color:${el.color || '#fff'};
+                font-weight:${el.bold ? 'bold' : 'normal'};
+                text-align:${el.align || 'center'};
+                display:flex;align-items:center;justify-content:center;
+                line-height:var(--lh);
+                word-break:break-word;
+                pointer-events:none;
+                overflow:hidden;
+                padding:4px;">${esc(el.content || '')}</div>`;
+        } else if (el.type === 'image') {
+            html += `<div style="position:absolute;left:${el.x*100}%;top:${el.y*100}%;width:${el.w*100}%;height:${el.h*100}%;
+                display:flex;align-items:center;justify-content:center;
+                pointer-events:none;
+                overflow:hidden;">
+                <img src="${el.imageData || ''}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:4px;" draggable="false">
+            </div>`;
+        }
+    }
+    html += '</div>';
+    return html;
+}
+
+// Generate PPT elements for a custom slide
+function generateCustomPPT(slide, elements, BG, W, G) {
+    slide.background = { color: BG };
+    if (!elements || elements.length === 0) return;
+    for (const el of elements) {
+        const x = el.x * 13.333, y = el.y * 7.5, w = el.w * 13.333, h = el.h * 7.5;
+        if (el.type === 'text') {
+            const opts = {
+                x: x, y: y, w: w, h: h,
+                fontSize: el.fontSize || 28,
+                color: el.color || W,
+                bold: el.bold || false,
+                align: el.align || 'center',
+                valign: 'middle',
+                fontFace: 'Microsoft YaHei',
+                lineSpacing: Math.round((el.fontSize || 28) * 1.6),
+                wordWrap: true,
+            };
+            slide.addText(el.content || '', opts);
+        } else if (el.type === 'image' && el.imageData) {
+            slide.addImage({ path: el.imageData, x: x, y: y, w: w, h: h, sizing: { type: 'contain', w: w, h: h } });
+        }
+    }
+}
 </script>
+
+<!-- ======= Custom Page Editor Overlay ======= -->
+<div class="cp-editor-overlay" id="cp-editor-overlay">
+    <div class="cp-editor-window">
+        <div class="cp-editor-toolbar">
+            <span class="title" id="cp-editor-title">编辑自定义页面</span>
+            <button onclick="addTextElement()">➕ 文字框</button>
+            <button onclick="addImageElement()">🖼️ 图片</button>
+            <button class="del-el-btn" id="cp-del-el-btn" onclick="deleteSelectedElement()">🗑️ 删除</button>
+            <button class="close-btn" onclick="closeCustomEditor()">✕ 关闭</button>
+        </div>
+        <div class="cp-prop-bar" id="cp-prop-bar">
+            <label>字号</label>
+            <input type="number" id="cp-font-size" value="28" min="10" max="100" onchange="updateSelectedProp('fontSize', parseInt(this.value))">
+            <label>颜色</label>
+            <input type="color" id="cp-color" value="#ffffff" onchange="updateSelectedProp('color', this.value)">
+            <button id="cp-bold-btn" onclick="toggleSelectedBold()" style="font-weight:bold;">B</button>
+            <select id="cp-align" onchange="updateSelectedProp('align', this.value)">
+                <option value="center">居中</option>
+                <option value="left">左对齐</option>
+                <option value="right">右对齐</option>
+            </select>
+        </div>
+        <div class="cp-canvas-wrap">
+            <div class="cp-canvas" id="cp-canvas">
+                <div class="cp-canvas-empty" id="cp-canvas-empty">点击上方按钮添加文字框或图片</div>
+            </div>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>
