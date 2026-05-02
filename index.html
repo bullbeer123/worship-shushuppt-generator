@@ -3438,11 +3438,24 @@ function openCustomEditor(index) {
     cpSelectedElId = null;
     const cs = customSlides[index];
     document.getElementById('cp-editor-title').textContent = '编辑自定义页面 #' + (index+1);
+    // 填充插入位置下拉
+    const posSel = document.getElementById('cp-insert-pos');
+    posSel.innerHTML = CP_POSITIONS.map(p =>
+        `<option value="${p.id}" ${(cs.insertAfter||'论坛') === p.id ? 'selected' : ''}>${p.label}</option>`
+    ).join('');
     document.getElementById('cp-editor-overlay').classList.add('show');
     document.getElementById('side-panel').style.display = 'none';
     document.getElementById('cp-prop-bar').classList.remove('show');
     document.getElementById('cp-del-el-btn').classList.remove('show');
     renderCanvas(cs);
+}
+
+function updateEditorPosition(posId) {
+    if (cpEditIndex >= 0 && customSlides[cpEditIndex]) {
+        customSlides[cpEditIndex].insertAfter = posId;
+        renderCPList(); // 同步更新管理区的下拉
+        showToast('✅ 插入位置已更新');
+    }
 }
 
 function closeCustomEditor() {
@@ -3883,6 +3896,10 @@ function generateCustomPPT(slide, elements, BG, W, G) {
     <div class="cp-editor-window">
         <div class="cp-editor-toolbar">
             <span class="title" id="cp-editor-title">编辑自定义页面</span>
+            <span style="color:#8b7a96;font-size:13px;margin:0 4px;">插入位置</span>
+            <select id="cp-insert-pos" style="padding:4px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.08);color:#d4a5e8;font-size:13px;font-family:inherit;outline:none;cursor:pointer;"
+                onchange="updateEditorPosition(this.value)">
+            </select>
             <button onclick="addTextElement()">➕ 文字框</button>
             <button onclick="addImageElement()">🖼️ 图片</button>
             <button class="del-el-btn" id="cp-del-el-btn" onclick="deleteSelectedElement()">🗑️ 删除</button>
