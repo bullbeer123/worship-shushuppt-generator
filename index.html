@@ -2677,17 +2677,24 @@ function renderSlide() {
             break;
         case 'declaration-items': {
             const secTitle = s.sectionTitle || '777宣告';
-            const itemsHtml = s.items.map((item) => {
-                const numMatch = item.match(/^(\d+)[.、．]\s*/);
-                const num = numMatch ? numMatch[1] : '';
-                const content = numMatch ? item.substring(numMatch[0].length) : item;
-                const prefix = num ? `<span style="color:#F5D76E;font-weight:bold;margin-right:8px;font-size:calc(clamp(20px,3vw,36px) * var(--fs-scale));">${num}.</span>` : '';
-                return `<div style="display:flex;align-items:flex-start;margin-bottom:10px;text-align:left;width:100%;font-size:calc(clamp(14px,2.2vw,26px) * var(--fs-scale));line-height:var(--lh);">
-                    ${prefix}<span>${esc(content)}</span></div>`;
-            }).join('');
+            const isFallback = !s.sectionTitle && s.items.length === 1 && !/^\d+[.、．]/.test(s.items[0]);
+            let itemsHtml;
+            if (isFallback) {
+                // 简单模式：直接显示宣言全文
+                itemsHtml = `<div style="text-align:left;width:100%;font-size:calc(clamp(16px,2.5vw,30px) * var(--fs-scale));line-height:var(--lh);white-space:pre-wrap;">${esc(s.items[0])}</div>`;
+            } else {
+                itemsHtml = s.items.map((item) => {
+                    const numMatch = item.match(/^(\d+)[.、．]\s*/);
+                    const num = numMatch ? numMatch[1] : '';
+                    const content = numMatch ? item.substring(numMatch[0].length) : item;
+                    const prefix = num ? `<span style="color:#F5D76E;font-weight:bold;margin-right:8px;font-size:calc(clamp(20px,3vw,36px) * var(--fs-scale));">${num}.</span>` : '';
+                    return `<div style="display:flex;align-items:flex-start;margin-bottom:10px;text-align:left;width:100%;font-size:calc(clamp(14px,2.2vw,26px) * var(--fs-scale));line-height:var(--lh);">
+                        ${prefix}<span>${esc(content)}</span></div>`;
+                }).join('');
+            }
             html = `<div style="width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;padding:0 5%;">
                 <div style="font-size:calc(clamp(13px,1.6vw,20px) * var(--fs-scale));color:#F5D76E;text-align:center;margin-bottom:6px;">${esc(s.header)}</div>
-                <div style="font-size:calc(clamp(20px,3vw,38px) * var(--fs-scale));color:#fff;font-weight:bold;text-align:center;margin-bottom:14px;">${esc(secTitle)}</div>
+                ${secTitle ? `<div style="font-size:calc(clamp(20px,3vw,38px) * var(--fs-scale));color:#fff;font-weight:bold;text-align:center;margin-bottom:14px;">${esc(secTitle)}</div>` : ''}
                 ${itemsHtml}
             </div>`;
             break;
@@ -3861,10 +3868,7 @@ function parse777Declaration(text) {
 
     // 按段落分割，找到"7大"开头的章节
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    let currentSection = '';
     let currentItems = [];
-
-    // 尝试按 section 分割
     const sectionTitles = ['7大望楼', '7大旅程', '7大里程碑'];
     let currentSecIdx = -1;
     const sections = [];
@@ -3885,41 +3889,47 @@ function parse777Declaration(text) {
         sections.push({ title: sectionTitles[currentSecIdx], items: [...currentItems] });
     }
 
-    // 每个章节的内容拆成多页，每页3-4条
-    for (const sec of sections) {
-        // 旅程内容特别长，每页2-3条
-        const itemsPerPage = sec.title === '7大旅程' ? 3 : 4;
-        const pages = [];
-        let pageItems = [];
+    if (sections.length > 0) {
+        // 有"7大"章节 → 拆成多页
+        for (const sec of sections) {
+            const itemsPerPage = sec.title === '7大旅程' ? 3 : 4;
+            const pages = [];
+            let pageItems = [];
 
-        for (const item of sec.items) {
-            // 判断是否以数字开头（新条目）
-            if (/^\d+[.、．]/.test(item.trim()) && pageItems.length > 0) {
-                // 检查如果加上这条会超出，先保存当前页
-                if (pageItems.length >= itemsPerPage) {
+            for (const item of sec.items) {
+                if (/^\d+[.、．]/.test(item.trim()) && pageItems.length > 0) {
+                    if (pageItems.length >= itemsPerPage) {
+                        pages.push([...pageItems]);
+                        pageItems = [];
+                    }
+                }
+                pageItems.push(item);
+                if (item.length > 120 && pageItems.length >= 1) {
                     pages.push([...pageItems]);
                     pageItems = [];
                 }
             }
-            pageItems.push(item);
+            if (pageItems.length > 0) pages.push(pageItems);
 
-            // 如果这条本身特别长（超过100字），单独一页
-            if (item.length > 120 && pageItems.length >= 1) {
-                pages.push([...pageItems]);
-                pageItems = [];
+            for (const items of pages) {
+                slides.push({
+                    type: 'declaration-items',
+                    header: header,
+                    sectionTitle: sec.title,
+                    items: items,
+                    section: sec.title
+                });
             }
         }
-        if (pageItems.length > 0) pages.push(pageItems);
-
-        for (const items of pages) {
-            slides.push({
-                type: 'declaration-items',
-                header: header,
-                sectionTitle: sec.title,
-                items: items,
-                section: sec.title
-            });
-        }
+    } else {
+        // 没有"7大"章节 → 显示为一段话页面
+        slides.push({
+            type: 'declaration-items',
+            header: '777 宣告',
+            sectionTitle: '',
+            items: [text],
+            section: '777宣告'
+        });
     }
 
     return slides;
