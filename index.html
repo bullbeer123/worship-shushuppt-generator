@@ -289,6 +289,55 @@
         .cp-item.highlight {
             animation: cp-highlight 0.8s ease-in-out 3;
         }
+
+        /* 777宣告快捷按钮 */
+        .decl-btn {
+            display:inline-block;padding:10px 22px;border:none;border-radius:10px;
+            background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;
+            font-size:17px;font-weight:bold;cursor:pointer;font-family:inherit;
+            transition:all 0.3s;box-shadow:0 3px 12px rgba(139,92,246,0.3);
+            margin:0 4px;
+        }
+        .decl-btn:hover { transform:translateY(-2px); box-shadow:0 5px 18px rgba(139,92,246,0.5); }
+
+        /* 777宣告查看弹窗 */
+        .decl-modal-overlay {
+            display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+            background:rgba(0,0,0,0.8);z-index:5000;
+            align-items:center;justify-content:center;padding:20px;
+        }
+        .decl-modal-overlay.show { display:flex; }
+        .decl-modal-window {
+            background:linear-gradient(135deg,#2c041d,#5b1a6e);
+            border-radius:16px;border:1px solid rgba(255,255,255,0.15);
+            max-width:700px;width:100%;max-height:85vh;
+            display:flex;flex-direction:column;
+            box-shadow:0 8px 40px rgba(0,0,0,0.6);
+        }
+        .decl-modal-header {
+            display:flex;align-items:center;justify-content:space-between;
+            padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.1);
+        }
+        .decl-modal-header .title { font-size:20px;color:#F5D76E;font-weight:bold; }
+        .decl-modal-header button {
+            padding:8px 16px;border:1px solid #ef4444;border-radius:8px;
+            background:rgba(239,68,68,0.15);color:#ef4444;font-size:15px;
+            cursor:pointer;font-family:inherit;
+        }
+        .decl-modal-header button:hover { background:rgba(239,68,68,0.25); }
+        .decl-modal-body {
+            flex:1;overflow-y:auto;padding:20px;
+        }
+        .decl-modal-body .item {
+            display:flex;align-items:flex-start;margin-bottom:14px;
+            text-align:left;font-size:17px;line-height:1.7;color:#fff;
+        }
+        .decl-modal-body .item .num {
+            color:#F5D76E;font-weight:bold;margin-right:10px;
+            font-size:19px;flex-shrink:0;min-width:28px;
+        }
+        .decl-modal-body::-webkit-scrollbar { width:6px; }
+        .decl-modal-body::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.2); border-radius:3px; }
         /* 手机端底部横排 */
         @media (max-width: 768px) {
             .side-panel {
@@ -953,6 +1002,14 @@
     <h1>⛪ 主日礼拜PPT生成器</h1>
     <p class="subtitle">粘贴礼拜内容 → 一键生成幻灯片</p>
 
+    <!-- 777宣告快捷入口 -->
+    <div id="decl-quick-btns" style="display:none;text-align:center;margin-bottom:18px;gap:10px;flex-wrap:wrap;justify-content:center;">
+        <span style="color:#F5D76E;font-weight:bold;font-size:16px;">📜 777宣告</span>
+        <button class="decl-btn" onclick="show777Section('7大望楼')">7大望楼</button>
+        <button class="decl-btn" onclick="show777Section('7大旅程')">7大旅程</button>
+        <button class="decl-btn" onclick="show777Section('7大里程碑')">7大里程碑</button>
+    </div>
+
     <!-- 恢复记录横幅 - 放在最顶部最醒目位置 -->
     <div id="restore-bar-top" style="display:none;margin-bottom:24px;">
         <div style="background:linear-gradient(135deg,rgba(245,215,110,0.15),rgba(192,132,252,0.15));border:2px solid rgba(245,215,110,0.5);border-radius:16px;padding:20px 24px;text-align:center;">
@@ -1132,7 +1189,7 @@
 
         <div class="field-group">
             <label>📝 777 宣告内容</label>
-            <textarea id="f-declaration" placeholder="777的祷告-绝对望楼&#10;777的话语-绝对旅程&#10;777的传道宣教-绝对里程碑"></textarea>
+            <textarea id="f-declaration" placeholder="777的祷告-绝对望楼&#10;777的话语-绝对旅程&#10;777的传道宣教-绝对里程碑" oninput="parse777AndShowButtons(this.value)"></textarea>
         </div>
 
         <hr class="section-divider">
@@ -1976,6 +2033,8 @@ async function parseText() {
 
     document.getElementById('f-forum').value = forumText;
     if (declText) document.getElementById('f-declaration').value = declText;
+    // 触发777快捷按钮显示
+    parse777AndShowButtons(document.getElementById('f-declaration').value);
 
     // Show edit section
     document.getElementById('edit-section').style.display = 'block';
@@ -2413,12 +2472,6 @@ function buildSlides(data) {
 
     // 1.5 礼拜日期 + 题目 + 自定义页面（开篇之后）
     slides.push({ type: 'date-title', data });
-    // 插入777宣告幻灯片（如果有宣告内容）
-    const declPages = parse777Declaration(data.declaration);
-    for (const dp of declPages) {
-        slides.push(dp);
-        tocSections.push({ name: dp.section, slideIndex: slides.length - 1 });
-    }
     insertCP('开篇');
 
     // 2. 献上赞美 — each song: title slide + lyrics pages
@@ -2675,23 +2728,6 @@ function renderSlide() {
         case 'simple':
             html = `<div class="s-title">${esc(s.title)}</div>`;
             break;
-        case 'declaration-items': {
-            const secTitle = s.sectionTitle || '777宣告';
-            const itemsHtml = s.items.map((item) => {
-                const numMatch = item.match(/^(\d+)[.、．]\s*/);
-                const num = numMatch ? numMatch[1] : '';
-                const content = numMatch ? item.substring(numMatch[0].length) : item;
-                const prefix = num ? `<span style="color:#F5D76E;font-weight:bold;margin-right:8px;font-size:calc(clamp(20px,3vw,36px) * var(--fs-scale));">${num}.</span>` : '';
-                return `<div style="display:flex;align-items:flex-start;margin-bottom:10px;text-align:left;width:100%;font-size:calc(clamp(14px,2.2vw,26px) * var(--fs-scale));line-height:var(--lh);">
-                    ${prefix}<span>${esc(content)}</span></div>`;
-            }).join('');
-            html = `<div style="width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;padding:0 5%;">
-                <div style="font-size:calc(clamp(13px,1.6vw,20px) * var(--fs-scale));color:#F5D76E;text-align:center;margin-bottom:6px;">${esc(s.header)}</div>
-                <div style="font-size:calc(clamp(20px,3vw,38px) * var(--fs-scale));color:#fff;font-weight:bold;text-align:center;margin-bottom:14px;">${esc(secTitle)}</div>
-                ${itemsHtml}
-            </div>`;
-            break;
-        }
         case 'forum':
             html = `<div class="s-title">论坛分享</div>${s.data.forum ? '<div class="s-body">' + esc(s.data.forum) + '</div>' : ''}`;
             break;
@@ -3127,6 +3163,8 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         }
     } catch (e) {}
+    // 页面加载时检查是否有已有的777宣告内容
+    parse777AndShowButtons(document.getElementById('f-declaration').value);
     // ★ 启动时预热：字典中所有歌曲URL后台预下载（离线缓存）
     setTimeout(() => {
         const dict = getSongUrlDict();
@@ -3264,13 +3302,6 @@ async function generatePPT() {
                     slide.addText(s.text, { x: 1, y: 1, w: 11.333, h: 5.5, fontSize: 28, color: W, align: 'center', valign: 'middle', fontFace: 'Microsoft YaHei', lineSpacing: 44 });
                     break;
                 case 'simple': secTitle(slide, s.title); break;
-                case 'declaration-items': {
-                    secTitle(slide, s.sectionTitle || '777宣告');
-                    const itemTexts = s.items.join('\n');
-                    slide.addText(s.header, { x: 0.5, y: 1.5, w: 12.333, h: 0.6, fontSize: 14, color: G, align: 'center', fontFace: 'Microsoft YaHei' });
-                    slide.addText(itemTexts, { x: 0.8, y: 2.2, w: 11.733, h: 4.5, fontSize: 16, color: W, align: 'left', valign: 'top', fontFace: 'Microsoft YaHei', lineSpacing: 26, paraSpaceAfter: 6, bold: false });
-                    break;
-                }
                 case 'forum':
                     secTitle(slide, '论坛分享');
                     if (s.data.forum) slide.addText(s.data.forum, { x: 1, y: 2.0, w: 11.333, h: 4.5, fontSize: 24, color: W, align: 'center', valign: 'middle', fontFace: 'Microsoft YaHei', lineSpacing: 38 });
@@ -3852,78 +3883,89 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// ============ 777 宣告内容 ============
-// 将777宣告文本解析为幻灯片数据（拆成多页）
-function parse777Declaration(text) {
-    if (!text || !text.trim()) return [];
-    const slides = [];
+// ============ 777 宣告 ============
+// 解析宣告文本，缓存到全局供快捷按钮使用
+let _decl777Data = null; // { '7大望楼': [items], '7大旅程': [...], '7大里程碑': [...] }
+
+function parse777AndShowButtons(text) {
+    const btnArea = document.getElementById('decl-quick-btns');
+    _decl777Data = null;
+    btnArea.style.display = 'none';
+
+    if (!text || !text.trim()) return;
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-    // 1) 按 "7大望楼" "7大旅程" "7大里程碑" 切分成章节
     const sectionKeys = ['7大望楼', '7大旅程', '7大里程碑'];
-    const sections = []; // [{ title, rawLines: [...] }]
+    const sections = {}; // title → items[]
     let curTitle = null, curLines = [];
 
     for (const line of lines) {
         const found = sectionKeys.find(k => line.includes(k));
         if (found) {
-            if (curTitle && curLines.length > 0) sections.push({ title: curTitle, rawLines: [...curLines] });
+            if (curTitle && curLines.length > 0) {
+                sections[curTitle] = mergeLinesToItems(curLines);
+            }
             curTitle = found;
             curLines = [];
         } else if (curTitle) {
             curLines.push(line);
         }
     }
-    if (curTitle && curLines.length > 0) sections.push({ title: curTitle, rawLines: [...curLines] });
-
-    if (sections.length === 0) return []; // 没有7大章节就不生成
-
-    // 2) 每个章节的行合成为独立条目（续行自动接上，按"数字."分割）
-    for (const sec of sections) {
-        const items = [];
-        let buf = '';
-        for (const line of sec.rawLines) {
-            if (/^\d+[.、．]/.test(line)) {
-                if (buf) items.push(buf.trim());
-                buf = line;
-            } else {
-                buf += '　' + line;
-            }
-        }
-        if (buf) items.push(buf.trim());
-
-        if (items.length === 0) continue;
-
-        // 3) 分页：每页不超过4条，旅程每页3条
-        const perPage = sec.title === '7大旅程' ? 3 : 4;
-        // 特别长的条目单独一页（>200字就独占一页）
-        const pages = [];
-        let batch = [];
-        for (const item of items) {
-            if (item.length > 200) {
-                if (batch.length > 0) { pages.push(batch); batch = []; }
-                pages.push([item]);
-            } else {
-                batch.push(item);
-                if (batch.length >= perPage) { pages.push(batch); batch = []; }
-            }
-        }
-        if (batch.length > 0) pages.push(batch);
-
-        for (const pageItems of pages) {
-            slides.push({
-                type: 'declaration-items',
-                header: '宝座的望楼.旅程.里程碑　300%.3camp.医治伟人时代.后代',
-                sectionTitle: sec.title,
-                items: pageItems,
-                section: sec.title
-            });
-        }
+    if (curTitle && curLines.length > 0) {
+        sections[curTitle] = mergeLinesToItems(curLines);
     }
 
-    return slides;
+    if (Object.keys(sections).length === 0) return;
+
+    _decl777Data = sections;
+    btnArea.style.display = 'flex';
 }
+
+function mergeLinesToItems(lines) {
+    const items = [];
+    let buf = '';
+    for (const line of lines) {
+        if (/^\d+[.、．]/.test(line)) {
+            if (buf) items.push(buf.trim());
+            buf = line;
+        } else {
+            buf += '　' + line;
+        }
+    }
+    if (buf) items.push(buf.trim());
+    return items;
+}
+
+function show777Section(title) {
+    if (!_decl777Data || !_decl777Data[title]) {
+        showToast('没有找到「' + title + '」的内容', true);
+        return;
+    }
+    const items = _decl777Data[title];
+    document.getElementById('decl-modal-title').textContent = title;
+    const body = document.getElementById('decl-modal-body');
+    body.innerHTML = items.map((item, i) => {
+        const numMatch = item.match(/^(\d+)[.、．]\s*/);
+        const num = numMatch ? numMatch[1] : '';
+        const content = numMatch ? item.substring(numMatch[0].length) : item;
+        return `<div class="item"><span class="num">${num}.</span><span>${esc(content)}</span></div>`;
+    }).join('');
+    document.getElementById('decl-modal-overlay').classList.add('show');
+}
+
+function closeDeclModal() {
+    document.getElementById('decl-modal-overlay').classList.remove('show');
+}
+
+// 关闭弹窗：点击遮罩层
+document.addEventListener('click', function(e) {
+    if (e.target.id === 'decl-modal-overlay') closeDeclModal();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('decl-modal-overlay').classList.contains('show')) {
+        closeDeclModal();
+    }
+});
 
 // ============ Build Custom Slides into Slideshow ============
 // Build custom slide data for a given anchor position
@@ -4025,6 +4067,17 @@ function generateCustomPPT(slide, elements, BG, W, G) {
                 <div class="cp-canvas-empty" id="cp-canvas-empty">点击上方按钮添加文字框或图片</div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- ======= 777宣告查看弹窗 ======= -->
+<div class="decl-modal-overlay" id="decl-modal-overlay">
+    <div class="decl-modal-window">
+        <div class="decl-modal-header">
+            <span class="title" id="decl-modal-title">7大望楼</span>
+            <button onclick="closeDeclModal()">✕ 关闭</button>
+        </div>
+        <div class="decl-modal-body" id="decl-modal-body"></div>
     </div>
 </div>
 
