@@ -2413,6 +2413,12 @@ function buildSlides(data) {
 
     // 1.5 礼拜日期 + 题目 + 自定义页面（开篇之后）
     slides.push({ type: 'date-title', data });
+    // 插入777宣告幻灯片（如果有宣告内容）
+    const declPages = parse777Declaration(data.declaration);
+    for (const dp of declPages) {
+        slides.push(dp);
+        tocSections.push({ name: dp.section, slideIndex: slides.length - 1 });
+    }
     insertCP('开篇');
 
     // 2. 献上赞美 — each song: title slide + lyrics pages
@@ -2669,6 +2675,23 @@ function renderSlide() {
         case 'simple':
             html = `<div class="s-title">${esc(s.title)}</div>`;
             break;
+        case 'declaration-items': {
+            const secTitle = s.sectionTitle || '777宣告';
+            const itemsHtml = s.items.map((item) => {
+                const numMatch = item.match(/^(\d+)[.、．]\s*/);
+                const num = numMatch ? numMatch[1] : '';
+                const content = numMatch ? item.substring(numMatch[0].length) : item;
+                const prefix = num ? `<span style="color:#F5D76E;font-weight:bold;margin-right:8px;font-size:calc(clamp(20px,3vw,36px) * var(--fs-scale));">${num}.</span>` : '';
+                return `<div style="display:flex;align-items:flex-start;margin-bottom:10px;text-align:left;width:100%;font-size:calc(clamp(14px,2.2vw,26px) * var(--fs-scale));line-height:var(--lh);">
+                    ${prefix}<span>${esc(content)}</span></div>`;
+            }).join('');
+            html = `<div style="width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;padding:0 5%;">
+                <div style="font-size:calc(clamp(13px,1.6vw,20px) * var(--fs-scale));color:#F5D76E;text-align:center;margin-bottom:6px;">${esc(s.header)}</div>
+                <div style="font-size:calc(clamp(20px,3vw,38px) * var(--fs-scale));color:#fff;font-weight:bold;text-align:center;margin-bottom:14px;">${esc(secTitle)}</div>
+                ${itemsHtml}
+            </div>`;
+            break;
+        }
         case 'forum':
             html = `<div class="s-title">论坛分享</div>${s.data.forum ? '<div class="s-body">' + esc(s.data.forum) + '</div>' : ''}`;
             break;
@@ -3241,6 +3264,13 @@ async function generatePPT() {
                     slide.addText(s.text, { x: 1, y: 1, w: 11.333, h: 5.5, fontSize: 28, color: W, align: 'center', valign: 'middle', fontFace: 'Microsoft YaHei', lineSpacing: 44 });
                     break;
                 case 'simple': secTitle(slide, s.title); break;
+                case 'declaration-items': {
+                    secTitle(slide, s.sectionTitle || '777宣告');
+                    const itemTexts = s.items.join('\n');
+                    slide.addText(s.header, { x: 0.5, y: 1.5, w: 12.333, h: 0.6, fontSize: 14, color: G, align: 'center', fontFace: 'Microsoft YaHei' });
+                    slide.addText(itemTexts, { x: 0.8, y: 2.2, w: 11.733, h: 4.5, fontSize: 16, color: W, align: 'left', valign: 'top', fontFace: 'Microsoft YaHei', lineSpacing: 26, paraSpaceAfter: 6, bold: false });
+                    break;
+                }
                 case 'forum':
                     secTitle(slide, '论坛分享');
                     if (s.data.forum) slide.addText(s.data.forum, { x: 1, y: 2.0, w: 11.333, h: 4.5, fontSize: 24, color: W, align: 'center', valign: 'middle', fontFace: 'Microsoft YaHei', lineSpacing: 38 });
@@ -3821,6 +3851,79 @@ document.addEventListener('keydown', function(e) {
         deleteSelectedElement();
     }
 });
+
+// ============ 777 宣告内容 ============
+// 将777宣告文本解析为幻灯片数据（拆成多页，每页展示一条）
+function parse777Declaration(text) {
+    if (!text || !text.trim()) return [];
+    const slides = [];
+    const header = '宝座的望楼.旅程.里程碑 300%.3camp.医治伟人时代.后代';
+
+    // 按段落分割，找到"7大"开头的章节
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    let currentSection = '';
+    let currentItems = [];
+
+    // 尝试按 section 分割
+    const sectionTitles = ['7大望楼', '7大旅程', '7大里程碑'];
+    let currentSecIdx = -1;
+    const sections = [];
+
+    for (const line of lines) {
+        const idx = sectionTitles.findIndex(t => line.includes(t));
+        if (idx >= 0) {
+            if (currentSecIdx >= 0 && currentItems.length > 0) {
+                sections.push({ title: sectionTitles[currentSecIdx], items: [...currentItems] });
+            }
+            currentSecIdx = idx;
+            currentItems = [];
+        } else if (currentSecIdx >= 0) {
+            currentItems.push(line);
+        }
+    }
+    if (currentSecIdx >= 0 && currentItems.length > 0) {
+        sections.push({ title: sectionTitles[currentSecIdx], items: [...currentItems] });
+    }
+
+    // 每个章节的内容拆成多页，每页3-4条
+    for (const sec of sections) {
+        // 旅程内容特别长，每页2-3条
+        const itemsPerPage = sec.title === '7大旅程' ? 3 : 4;
+        const pages = [];
+        let pageItems = [];
+
+        for (const item of sec.items) {
+            // 判断是否以数字开头（新条目）
+            if (/^\d+[.、．]/.test(item.trim()) && pageItems.length > 0) {
+                // 检查如果加上这条会超出，先保存当前页
+                if (pageItems.length >= itemsPerPage) {
+                    pages.push([...pageItems]);
+                    pageItems = [];
+                }
+            }
+            pageItems.push(item);
+
+            // 如果这条本身特别长（超过100字），单独一页
+            if (item.length > 120 && pageItems.length >= 1) {
+                pages.push([...pageItems]);
+                pageItems = [];
+            }
+        }
+        if (pageItems.length > 0) pages.push(pageItems);
+
+        for (const items of pages) {
+            slides.push({
+                type: 'declaration-items',
+                header: header,
+                sectionTitle: sec.title,
+                items: items,
+                section: sec.title
+            });
+        }
+    }
+
+    return slides;
+}
 
 // ============ Build Custom Slides into Slideshow ============
 // Build custom slide data for a given anchor position
