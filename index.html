@@ -2677,24 +2677,17 @@ function renderSlide() {
             break;
         case 'declaration-items': {
             const secTitle = s.sectionTitle || '777宣告';
-            const isFallback = !s.sectionTitle && s.items.length === 1 && !/^\d+[.、．]/.test(s.items[0]);
-            let itemsHtml;
-            if (isFallback) {
-                // 简单模式：直接显示宣言全文
-                itemsHtml = `<div style="text-align:left;width:100%;font-size:calc(clamp(16px,2.5vw,30px) * var(--fs-scale));line-height:var(--lh);white-space:pre-wrap;">${esc(s.items[0])}</div>`;
-            } else {
-                itemsHtml = s.items.map((item) => {
-                    const numMatch = item.match(/^(\d+)[.、．]\s*/);
-                    const num = numMatch ? numMatch[1] : '';
-                    const content = numMatch ? item.substring(numMatch[0].length) : item;
-                    const prefix = num ? `<span style="color:#F5D76E;font-weight:bold;margin-right:8px;font-size:calc(clamp(20px,3vw,36px) * var(--fs-scale));">${num}.</span>` : '';
-                    return `<div style="display:flex;align-items:flex-start;margin-bottom:10px;text-align:left;width:100%;font-size:calc(clamp(14px,2.2vw,26px) * var(--fs-scale));line-height:var(--lh);">
-                        ${prefix}<span>${esc(content)}</span></div>`;
-                }).join('');
-            }
+            const itemsHtml = s.items.map((item) => {
+                const numMatch = item.match(/^(\d+)[.、．]\s*/);
+                const num = numMatch ? numMatch[1] : '';
+                const content = numMatch ? item.substring(numMatch[0].length) : item;
+                const prefix = num ? `<span style="color:#F5D76E;font-weight:bold;margin-right:8px;font-size:calc(clamp(20px,3vw,36px) * var(--fs-scale));">${num}.</span>` : '';
+                return `<div style="display:flex;align-items:flex-start;margin-bottom:10px;text-align:left;width:100%;font-size:calc(clamp(14px,2.2vw,26px) * var(--fs-scale));line-height:var(--lh);">
+                    ${prefix}<span>${esc(content)}</span></div>`;
+            }).join('');
             html = `<div style="width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;padding:0 5%;">
                 <div style="font-size:calc(clamp(13px,1.6vw,20px) * var(--fs-scale));color:#F5D76E;text-align:center;margin-bottom:6px;">${esc(s.header)}</div>
-                ${secTitle ? `<div style="font-size:calc(clamp(20px,3vw,38px) * var(--fs-scale));color:#fff;font-weight:bold;text-align:center;margin-bottom:14px;">${esc(secTitle)}</div>` : ''}
+                <div style="font-size:calc(clamp(20px,3vw,38px) * var(--fs-scale));color:#fff;font-weight:bold;text-align:center;margin-bottom:14px;">${esc(secTitle)}</div>
                 ${itemsHtml}
             </div>`;
             break;
@@ -3860,76 +3853,73 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ============ 777 宣告内容 ============
-// 将777宣告文本解析为幻灯片数据（拆成多页，每页展示一条）
+// 将777宣告文本解析为幻灯片数据（拆成多页）
 function parse777Declaration(text) {
     if (!text || !text.trim()) return [];
     const slides = [];
-    const header = '宝座的望楼.旅程.里程碑 300%.3camp.医治伟人时代.后代';
 
-    // 按段落分割，找到"7大"开头的章节
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    let currentItems = [];
-    const sectionTitles = ['7大望楼', '7大旅程', '7大里程碑'];
-    let currentSecIdx = -1;
-    const sections = [];
+
+    // 1) 按 "7大望楼" "7大旅程" "7大里程碑" 切分成章节
+    const sectionKeys = ['7大望楼', '7大旅程', '7大里程碑'];
+    const sections = []; // [{ title, rawLines: [...] }]
+    let curTitle = null, curLines = [];
 
     for (const line of lines) {
-        const idx = sectionTitles.findIndex(t => line.includes(t));
-        if (idx >= 0) {
-            if (currentSecIdx >= 0 && currentItems.length > 0) {
-                sections.push({ title: sectionTitles[currentSecIdx], items: [...currentItems] });
-            }
-            currentSecIdx = idx;
-            currentItems = [];
-        } else if (currentSecIdx >= 0) {
-            currentItems.push(line);
+        const found = sectionKeys.find(k => line.includes(k));
+        if (found) {
+            if (curTitle && curLines.length > 0) sections.push({ title: curTitle, rawLines: [...curLines] });
+            curTitle = found;
+            curLines = [];
+        } else if (curTitle) {
+            curLines.push(line);
         }
     }
-    if (currentSecIdx >= 0 && currentItems.length > 0) {
-        sections.push({ title: sectionTitles[currentSecIdx], items: [...currentItems] });
-    }
+    if (curTitle && curLines.length > 0) sections.push({ title: curTitle, rawLines: [...curLines] });
 
-    if (sections.length > 0) {
-        // 有"7大"章节 → 拆成多页
-        for (const sec of sections) {
-            const itemsPerPage = sec.title === '7大旅程' ? 3 : 4;
-            const pages = [];
-            let pageItems = [];
+    if (sections.length === 0) return []; // 没有7大章节就不生成
 
-            for (const item of sec.items) {
-                if (/^\d+[.、．]/.test(item.trim()) && pageItems.length > 0) {
-                    if (pageItems.length >= itemsPerPage) {
-                        pages.push([...pageItems]);
-                        pageItems = [];
-                    }
-                }
-                pageItems.push(item);
-                if (item.length > 120 && pageItems.length >= 1) {
-                    pages.push([...pageItems]);
-                    pageItems = [];
-                }
-            }
-            if (pageItems.length > 0) pages.push(pageItems);
-
-            for (const items of pages) {
-                slides.push({
-                    type: 'declaration-items',
-                    header: header,
-                    sectionTitle: sec.title,
-                    items: items,
-                    section: sec.title
-                });
+    // 2) 每个章节的行合成为独立条目（续行自动接上，按"数字."分割）
+    for (const sec of sections) {
+        const items = [];
+        let buf = '';
+        for (const line of sec.rawLines) {
+            if (/^\d+[.、．]/.test(line)) {
+                if (buf) items.push(buf.trim());
+                buf = line;
+            } else {
+                buf += '　' + line;
             }
         }
-    } else {
-        // 没有"7大"章节 → 显示为一段话页面
-        slides.push({
-            type: 'declaration-items',
-            header: '777 宣告',
-            sectionTitle: '',
-            items: [text],
-            section: '777宣告'
-        });
+        if (buf) items.push(buf.trim());
+
+        if (items.length === 0) continue;
+
+        // 3) 分页：每页不超过4条，旅程每页3条
+        const perPage = sec.title === '7大旅程' ? 3 : 4;
+        // 特别长的条目单独一页（>200字就独占一页）
+        const pages = [];
+        let batch = [];
+        for (const item of items) {
+            if (item.length > 200) {
+                if (batch.length > 0) { pages.push(batch); batch = []; }
+                pages.push([item]);
+            } else {
+                batch.push(item);
+                if (batch.length >= perPage) { pages.push(batch); batch = []; }
+            }
+        }
+        if (batch.length > 0) pages.push(batch);
+
+        for (const pageItems of pages) {
+            slides.push({
+                type: 'declaration-items',
+                header: '宝座的望楼.旅程.里程碑　300%.3camp.医治伟人时代.后代',
+                sectionTitle: sec.title,
+                items: pageItems,
+                section: sec.title
+            });
+        }
     }
 
     return slides;
