@@ -811,23 +811,19 @@
         }
         .chalk-input-bar button:hover { background: rgba(192,132,252,0.35); }
 
-        /* 板书文本框样式 */
-        .chalk-body {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 10px 0;
-        }
-        .chalk-textbox {
+        /* 板书绝对定位文本框样式 */
+        .chalk-abs-textbox {
+            position: absolute;
             background: rgba(255,255,255,0.10);
-            border: 1px solid rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.18);
             border-radius: 10px;
-            padding: 14px 20px;
             color: #fff;
-            font-size: calc(clamp(28px,4.2vw,52px) * var(--fs-scale));
-            line-height: 1.5;
-            text-align: left;
-            width: 100%;
+            line-height: 1.4;
+            display: flex;
+            align-items: center;
+            padding: 8px 14px;
+            word-break: break-word;
+            overflow: hidden;
             box-sizing: border-box;
         }
 
@@ -2668,8 +2664,8 @@ function buildSlides(data) {
                 slides.push({ type: 'sermon-verse', label: label, text: verse });
             }
         }
-        // 板书页面（空白，播放中可添加文字）
-        slides.push({ type: 'sermon-chalkboard', label: label + ' 板书', text: '', chalkLines: [] });
+        // 板书页面（空白，播放中可添加文本框）
+        slides.push({ type: 'sermon-chalkboard', label: label + ' 板书', text: '', chalkElements: [] });
     });
     // 自定义页面（证道之后）
     insertCP('证道');
@@ -2825,16 +2821,21 @@ function renderSlide() {
             html = `<div class="s-subtitle" style="margin-top:0;">${esc(s.label)}</div><div class="s-body" style="margin-top:8px;font-size:${autoVerseFontSize(s.text)};">${esc(s.text)}</div>`;
             break;
         case 'sermon-chalkboard':
-            const chalkLines = s.chalkLines || [];
-            let chalkHtml = '';
-            if (chalkLines.length > 0) {
-                chalkHtml = chalkLines.map(function(l) {
-                    return '<div class="chalk-textbox">' + esc(l) + '</div>';
-                }).join('');
+            var chalkEls = s.chalkElements || [];
+            var chalkHtml = '';
+            if (chalkEls.length > 0) {
+                chalkHtml = '<div style="position:relative;width:100%;height:100%;">';
+                for (var ci = 0; ci < chalkEls.length; ci++) {
+                    var el = chalkEls[ci];
+                    if (el.type === 'text') {
+                        chalkHtml += '<div class="chalk-abs-textbox" style="left:' + (el.x * 100) + '%;top:' + (el.y * 100) + '%;width:' + (el.w * 100) + '%;height:' + (el.h * 100) + '%;font-size:calc(clamp(16px,' + (el.fontSize / 4) + 'vw,' + el.fontSize + 'px) * var(--fs-scale));text-align:' + (el.align || 'left') + ';">' + esc(el.content || '') + '</div>';
+                    }
+                }
+                chalkHtml += '</div>';
             } else {
-                chalkHtml = '<span style="color:#666;font-size:30px;">（空白板书页）</span>';
+                chalkHtml = '<div class="s-body" style="display:flex;align-items:center;justify-content:center;height:80%;"><span style="color:#666;font-size:30px;">（空白板书页）</span></div>';
             }
-            html = '<div class="s-title" style="color:#fff;">板书</div><div class="s-subtitle" style="color:#ccc;">' + esc(s.label) + '</div><div class="s-body chalk-body">' + chalkHtml + '</div>';
+            html = '<div class="s-title" style="color:#fff;position:relative;z-index:2;">板书</div><div class="s-subtitle" style="color:#ccc;position:relative;z-index:2;">' + esc(s.label) + '</div>' + chalkHtml;
             page.style.background = '#1a1a1a';
             page.style.backgroundImage = '';
             // 显示板书输入栏
@@ -2931,14 +2932,31 @@ function closeSlideshow() {
 }
 
 // ============ 板书操作（播放中交互） ============
+var _chalkElId = 1;
+
 function chalkAddText() {
     var input = document.getElementById('chalk-input-text');
     var text = input.value.trim();
     if (!text) return;
     var s = slides[currentSlide];
     if (s && s.type === 'sermon-chalkboard') {
-        if (!s.chalkLines) s.chalkLines = [];
-        s.chalkLines.push(text);
+        if (!s.chalkElements) s.chalkElements = [];
+        // 自动定位：从上往下排列，左右微错开
+        var baseY = 0.18 + s.chalkElements.length * 0.20;
+        var offsetX = (s.chalkElements.length % 2 === 0) ? 0.05 : 0.10;
+        s.chalkElements.push({
+            id: 'chk_' + (_chalkElId++),
+            type: 'text',
+            x: offsetX,
+            y: baseY,
+            w: 0.9 - offsetX * 2,
+            h: 0.16,
+            content: text,
+            fontSize: 28,
+            color: '#ffffff',
+            bold: false,
+            align: 'left'
+        });
         input.value = '';
         renderSlide();
     }
@@ -2947,7 +2965,7 @@ function chalkAddText() {
 function chalkAddPage() {
     var s = slides[currentSlide];
     if (!s || s.type !== 'sermon-chalkboard') return;
-    var newSlide = { type: 'sermon-chalkboard', label: s.label, text: '', chalkLines: [] };
+    var newSlide = { type: 'sermon-chalkboard', label: s.label, text: '', chalkElements: [] };
     slides.splice(currentSlide + 1, 0, newSlide);
     currentSlide++;
     renderSlide();
@@ -2956,7 +2974,8 @@ function chalkAddPage() {
 function chalkClear() {
     var s = slides[currentSlide];
     if (s && s.type === 'sermon-chalkboard') {
-        s.chalkLines = [];
+        s.chalkElements = [];
+        _chalkElId = 1;
         renderSlide();
     }
 }
