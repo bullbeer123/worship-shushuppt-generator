@@ -1960,9 +1960,17 @@ async function parseText() {
     }
     if (praiseEnd) {
         const praiseContent = praiseEnd[0].replace(/^赞美\s*[：:，,]?\s*/, '');
-        // 去掉换行，按逗号分割
+        // 先按中文逗号/顿号分割，若分割后只有一项，再尝试按数字编号边界分割
+        // 支持格式：①"77名称，134名称"（逗号分隔）②"77名称134名称"（直接相连）
         const praiseText = praiseContent.replace(/\s+/g, '').replace(/[，,、]/g, '\x00');
-        const songs = praiseText.split('\x00').filter(Boolean);
+        let songs = praiseText.split('\x00').filter(Boolean);
+        if (songs.length === 1 && songs[0]) {
+            // 尝试按"[非数字后紧跟2位以上数字]"切割（歌名文字后紧跟新歌编号）
+            // 例："77那路.那真理.那生命的光134拥有望楼" → ['77那路.那真理.那生命的光', '134拥有望楼']
+            const split2 = songs[0].replace(/([^\d])(\d{2,3})/g, '$1\x00$2');
+            const parts2 = split2.split('\x00').filter(Boolean);
+            if (parts2.length >= 2) songs = parts2;
+        }
         document.getElementById('f-praise1').value = (songs[0] || '').trim();
         document.getElementById('f-praise2').value = (songs[1] || '').trim();
     }
@@ -1982,7 +1990,13 @@ async function parseText() {
     if (hymnEnd) {
         const hymnContent = hymnEnd[0].replace(/^新编赞美\s*[：:，,]?\s*/, '');
         const hymnText = hymnContent.replace(/\s+/g, '').replace(/[，,、]/g, '\x00');
-        const nums = hymnText.split('\x00').filter(Boolean);
+        let nums = hymnText.split('\x00').filter(Boolean);
+        if (nums.length === 1 && nums[0]) {
+            // 无逗号时按"[非数字后跟2-3位数字]"切割
+            const split2 = nums[0].replace(/([^\d])(\d{2,3})/g, '$1\x00$2');
+            const parts2 = split2.split('\x00').filter(Boolean);
+            if (parts2.length >= 2) nums = parts2;
+        }
         document.getElementById('f-hymn1').value = (nums[0] || '').trim();
         document.getElementById('f-hymn2').value = (nums[1] || '').trim();
     }
@@ -2116,7 +2130,8 @@ async function fetchBible(type) {
             const firstLine = val.split('\n')[0];
             // Extract all Bible references (e.g. "创4:16-16" and "5:1-32" from "创4:16-16、5:1-32血统")
             // Match: book(optional) chapter:verses pattern
-            const parts = firstLine.match(/(撒上|撒下|创|出|利|民|申|书|士|得|王上|王下|代上|代下|拉|尼|斯|伯|诗|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)?\d+[:：]\d+[-–—]\d+|\d+[:：]\d+[-–—]\d+|(撒上|撒下|创|出|利|民|申|书|士|得|王上|王下|代上|代下|拉|尼|斯|伯|诗|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)\d+/g);
+            // 支持 "书卷章:节-节"（范围）、"书卷章:节"（单节）、"书卷章"（整章）三种格式
+            const parts = firstLine.match(/(撒上|撒下|创|出|利|民|申|书|士|得|王上|王下|代上|代下|拉|尼|斯|伯|诗|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)?\d+[:：]\d+[-–—]\d+|(撒上|撒下|创|出|利|民|申|书|士|得|王上|王下|代上|代下|拉|尼|斯|伯|诗|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)\d+[:：]\d+|(撒上|撒下|创|出|利|民|申|书|士|得|王上|王下|代上|代下|拉|尼|斯|伯|诗|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)\d+|\d+[:：]\d+[-–—]\d+/g);
             if (!parts) { showToast('无法识别经文引用', true); return; }
 
             // Detect full book name for the first ref (e.g. "创" → "创")
@@ -2143,7 +2158,11 @@ async function fetchBible(type) {
                 }
             }));
 
-            document.getElementById(fieldId).value = firstLine + '\n\n' + results.join('\n\n');
+            // 保留完整的证道描述（可能多行，含引用行和讲题行），追加获取到的经文
+            const allLines = val.split('\n').map(l => l.trim()).filter(Boolean);
+            // 取所有行（可能有引用+讲题），附加在经文之前
+            const titleBlock = allLines.join('\n');
+            document.getElementById(fieldId).value = titleBlock + '\n\n' + results.join('\n\n');
             showToast('✅ ' + queries.length + '段经文已获取！（数据来源：发光如星）');
         }
     } catch (err) {
