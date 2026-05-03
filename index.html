@@ -1831,6 +1831,16 @@ async function fetchPsalmSilent() {
     }
 }
 
+// 合并证道引用行和讲题行（如"彼前2:9\n拿着王..." → "彼前2:9 拿着王..."）
+function mergeSermonTitle(val) {
+    const lines = val.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length >= 2 && !lines[0].includes('【') && !lines[1].includes('【')) {
+        // 前两行都不是经文内容标记（【），说明第二行是讲题 → 合并
+        return lines[0] + '　' + lines.slice(1).join('\n');
+    }
+    return val;
+}
+
 // 静默获取证道经文（不操作按钮UI）
 async function fetchSermonSilent(type) {
     try {
@@ -1865,7 +1875,7 @@ async function fetchSermonSilent(type) {
 
         // 保留完整的证道描述（可能多行，含引用行和讲题行），追加获取到的经文
         const allLines = val.split('\n').map(l => l.trim()).filter(Boolean);
-        const titleBlock = allLines.join('\n');
+        const titleBlock = mergeSermonTitle(allLines.join('\n'));
         document.getElementById(fieldId).value = titleBlock + '\n\n' + results.join('\n\n');
         return { success: '证道' + (type === 'sermon1' ? '一' : '二') };
     } catch (err) {
@@ -1952,8 +1962,8 @@ async function parseText() {
             title1 = restOfText.substring(sermonStarts[0], endIdx).trim();
         }
     }
-    document.getElementById('f-sermon1').value = title1;
-    document.getElementById('f-sermon2').value = title2;
+    document.getElementById('f-sermon1').value = mergeSermonTitle(title1);
+    document.getElementById('f-sermon2').value = mergeSermonTitle(title2);
 
     // 3. Praise songs: "赞美111要深深思想耶稣，134拥有望楼的守望者"
     //    兼容有/无换行：在"赞美"和"诗篇"/"新编赞美"/"论坛"之间取内容
@@ -2164,8 +2174,7 @@ async function fetchBible(type) {
 
             // 保留完整的证道描述（可能多行，含引用行和讲题行），追加获取到的经文
             const allLines = val.split('\n').map(l => l.trim()).filter(Boolean);
-            // 取所有行（可能有引用+讲题），附加在经文之前
-            const titleBlock = allLines.join('\n');
+            const titleBlock = mergeSermonTitle(allLines.join('\n'));
             document.getElementById(fieldId).value = titleBlock + '\n\n' + results.join('\n\n');
             showToast('✅ ' + queries.length + '段经文已获取！（数据来源：发光如星）');
         }
