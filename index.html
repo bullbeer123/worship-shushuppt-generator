@@ -776,55 +776,86 @@
 
         .chalk-input-bar {
             display: none;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px 14px;
             background: rgba(0,0,0,0.55);
             border-top: 1px solid rgba(255,255,255,0.08);
             flex-shrink: 0;
         }
-        .chalk-input-bar input {
+        .chalk-input-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .chalk-props-row {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 0 2px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .chalk-input-bar input, .chalk-props-row input {
             flex: 1;
-            padding: 10px 14px;
+            padding: 8px 12px;
             border: 1px solid rgba(255,255,255,0.15);
             border-radius: 8px;
             background: rgba(255,255,255,0.08);
             color: #fff;
-            font-size: 16px;
+            font-size: 15px;
             font-family: inherit;
             outline: none;
             min-width: 0;
         }
-        .chalk-input-bar input:focus { border-color: #F5D76E; }
-        .chalk-input-bar input::placeholder { color: #8b7a96; }
-        .chalk-input-bar button {
-            padding: 8px 16px;
+        .chalk-input-bar input:focus, .chalk-props-row input:focus { border-color: #F5D76E; }
+        .chalk-input-bar input::placeholder, .chalk-props-row input::placeholder { color: #8b7a96; }
+        .chalk-input-bar button, .chalk-props-row button {
+            padding: 7px 14px;
             border: none;
             border-radius: 8px;
             background: rgba(192,132,252,0.2);
             color: #c084fc;
-            font-size: 15px;
+            font-size: 14px;
             cursor: pointer;
             font-family: inherit;
             white-space: nowrap;
             transition: background 0.2s;
         }
-        .chalk-input-bar button:hover { background: rgba(192,132,252,0.35); }
+        .chalk-input-bar button:hover, .chalk-props-row button:hover { background: rgba(192,132,252,0.35); }
+        .chalk-props-row select {
+            padding: 6px 8px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            outline: none;
+        }
+        .chalk-props-row select option { background: #333; color: #fff; }
 
         /* 板书绝对定位文本框样式 */
         .chalk-abs-textbox {
             position: absolute;
             background: rgba(255,255,255,0.10);
-            border: 1px solid rgba(255,255,255,0.18);
+            border: 2px solid rgba(255,255,255,0.18);
             border-radius: 10px;
             color: #fff;
             line-height: 1.4;
             display: flex;
             align-items: center;
-            padding: 8px 14px;
+            justify-content: center;
+            padding: 6px 10px;
             word-break: break-word;
             overflow: hidden;
             box-sizing: border-box;
+            user-select: none;
+            transition: border-color 0.2s;
+        }
+        .chalk-abs-textbox.chk-selected {
+            border-color: #F5D76E;
+            box-shadow: 0 0 0 2px rgba(245,215,110,0.3);
         }
 
         .example-toggle {
@@ -1369,10 +1400,26 @@
     </div>
     <!-- 板书输入栏（播放中编辑） -->
     <div class="chalk-input-bar" id="chalk-input-bar" onclick="event.stopPropagation()">
-        <input type="text" id="chalk-input-text" placeholder="输入板书文字，按回车插入文本框..." onkeydown="if(event.key==='Enter')chalkAddText()">
-        <button onclick="chalkAddText()">📝 插入文本框</button>
-        <button onclick="chalkAddPage()">➕ 加页</button>
-        <button onclick="chalkClear()">🗑 清空</button>
+        <div class="chalk-input-row">
+            <input type="text" id="chalk-input-text" placeholder="输入文字，回车插入文本框..." onkeydown="if(event.key==='Enter')chalkAddText()">
+            <button onclick="chalkAddText()">➕ 插入</button>
+            <button onclick="chalkClear()">🗑 清空</button>
+            <button onclick="chalkAddPage()">📄 加页</button>
+        </div>
+        <div class="chalk-props-row" id="chalk-props-bar">
+            <input type="text" id="chk-prop-content" onchange="updateChalkProp('content',this.value)" placeholder="文字内容">
+            <button onclick="updateChalkProp('fontSize',Math.min(72,(getChalkSelectedProp('fontSize')||28)+4))" title="增大字号">A+</button>
+            <button onclick="updateChalkProp('fontSize',Math.max(12,(getChalkSelectedProp('fontSize')||28)-4))" title="减小字号">A-</button>
+            <select id="chk-color-select" onchange="updateChalkProp('color',this.value)">
+                <option value="#ffffff">白</option>
+                <option value="#F5D76E">金</option>
+                <option value="#ef4444">红</option>
+                <option value="#60a5fa">蓝</option>
+                <option value="#4ade80">绿</option>
+            </select>
+            <button onclick="updateChalkProp('bold',!getChalkSelectedProp('bold'))" style="font-weight:bold;" title="加粗">B</button>
+            <button onclick="deleteChalkElement()" style="color:#ef4444;" title="删除选中">✕ 删除</button>
+        </div>
     </div>
     </div><!-- end slide-main -->
 </div>
@@ -2828,16 +2875,24 @@ function renderSlide() {
                 for (var ci = 0; ci < chalkEls.length; ci++) {
                     var el = chalkEls[ci];
                     if (el.type === 'text') {
-                        chalkHtml += '<div class="chalk-abs-textbox" style="left:' + (el.x * 100) + '%;top:' + (el.y * 100) + '%;width:' + (el.w * 100) + '%;height:' + (el.h * 100) + '%;font-size:calc(clamp(16px,' + (el.fontSize / 4) + 'vw,' + el.fontSize + 'px) * var(--fs-scale));text-align:' + (el.align || 'left') + ';">' + esc(el.content || '') + '</div>';
+                        var selClass = (el.id === chkSelectedId) ? ' chk-selected' : '';
+                        var fw = el.bold ? 'bold' : 'normal';
+                        chalkHtml += '<div class="chalk-abs-textbox' + selClass + '" data-chk-id="' + el.id + '" style="left:' + (el.x * 100) + '%;top:' + (el.y * 100) + '%;width:' + (el.w * 100) + '%;height:' + (el.h * 100) + '%;font-size:calc(clamp(16px,' + (el.fontSize / 4) + 'vw,' + el.fontSize + 'px) * var(--fs-scale));color:' + (el.color || '#fff') + ';font-weight:' + fw + ';text-align:' + (el.align || 'center') + ';cursor:move;">' + esc(el.content || '') + '</div>';
                     }
                 }
                 chalkHtml += '</div>';
             } else {
-                chalkHtml = '<div class="s-body" style="display:flex;align-items:center;justify-content:center;height:80%;"><span style="color:#666;font-size:30px;">（空白板书页）</span></div>';
+                chalkHtml = '<div class="s-body" style="display:flex;align-items:center;justify-content:center;height:80%;"><span style="color:#666;font-size:30px;">（空白板书页，输入文字后点击插入文本框）</span></div>';
             }
             html = '<div class="s-title" style="color:#fff;position:relative;z-index:2;">板书</div><div class="s-subtitle" style="color:#ccc;position:relative;z-index:2;">' + esc(s.label) + '</div>' + chalkHtml;
             page.style.background = '#1a1a1a';
             page.style.backgroundImage = '';
+            // 绑定鼠标事件（拖拽移动）
+            page.onmousedown = function(e) { chalkMouseDown(e); };
+            page.onmousemove = function(e) { chalkMouseMove(e); };
+            page.onmouseup = function() { chalkMouseUp(); };
+            page.onmouseleave = function() { chalkMouseUp(); };
+            page.onclick = function(e) { if (e) e.stopPropagation(); };
             // 显示板书输入栏
             document.getElementById('chalk-input-bar').style.display = 'flex';
             break;
@@ -2861,9 +2916,14 @@ function renderSlide() {
             break;
     }
 
-    // 非板书页隐藏板书输入栏
+    // 非板书页隐藏板书输入栏和鼠标事件
     if (s.type !== 'sermon-chalkboard') {
         document.getElementById('chalk-input-bar').style.display = 'none';
+        page.onmousedown = null;
+        page.onmousemove = null;
+        page.onmouseup = null;
+        page.onmouseleave = null;
+        page.onclick = null;
     }
 
     page.innerHTML = html;
@@ -2927,12 +2987,17 @@ function closeSlideshow() {
     document.getElementById('slide-toc').classList.remove('show');
     document.getElementById('side-panel').style.display = '';
     document.getElementById('chalk-input-bar').style.display = 'none';
+    document.getElementById('chalk-props-bar').style.display = 'none';
+    chkSelectedId = null;
+    chkDragState = null;
     tocVisible = false;
     stopAudio();
 }
 
-// ============ 板书操作（播放中交互） ============
+// ============ 板书操作（播放中交互编辑） ============
 var _chalkElId = 1;
+var chkSelectedId = null;      // 当前选中的板书元素id
+var chkDragState = null;       // { id, startX, startY, origX, origY, viewW, viewH }
 
 function chalkAddText() {
     var input = document.getElementById('chalk-input-text');
@@ -2941,22 +3006,25 @@ function chalkAddText() {
     var s = slides[currentSlide];
     if (s && s.type === 'sermon-chalkboard') {
         if (!s.chalkElements) s.chalkElements = [];
-        // 自动定位：从上往下排列，左右微错开
-        var baseY = 0.18 + s.chalkElements.length * 0.20;
-        var offsetX = (s.chalkElements.length % 2 === 0) ? 0.05 : 0.10;
+        var n = s.chalkElements.length;
+        var col = n % 3;
+        var row = Math.floor(n / 3);
+        var baseY = 0.16 + row * 0.24;
+        var offsetX = 0.05 + col * 0.30;
         s.chalkElements.push({
             id: 'chk_' + (_chalkElId++),
             type: 'text',
             x: offsetX,
             y: baseY,
-            w: 0.9 - offsetX * 2,
-            h: 0.16,
+            w: 0.26,
+            h: 0.18,
             content: text,
             fontSize: 28,
             color: '#ffffff',
             bold: false,
-            align: 'left'
+            align: 'center'
         });
+        chkSelectedId = s.chalkElements[s.chalkElements.length - 1].id;
         input.value = '';
         renderSlide();
     }
@@ -2965,6 +3033,7 @@ function chalkAddText() {
 function chalkAddPage() {
     var s = slides[currentSlide];
     if (!s || s.type !== 'sermon-chalkboard') return;
+    chkSelectedId = null;
     var newSlide = { type: 'sermon-chalkboard', label: s.label, text: '', chalkElements: [] };
     slides.splice(currentSlide + 1, 0, newSlide);
     currentSlide++;
@@ -2975,9 +3044,110 @@ function chalkClear() {
     var s = slides[currentSlide];
     if (s && s.type === 'sermon-chalkboard') {
         s.chalkElements = [];
+        chkSelectedId = null;
         _chalkElId = 1;
         renderSlide();
     }
+}
+
+// 选中/取消选中板书元素
+function selectChalkElement(id) {
+    chkSelectedId = id;
+    renderSlide();
+    // 更新属性栏显示
+    var propsBar = document.getElementById('chalk-props-bar');
+    if (id) {
+        var s = slides[currentSlide];
+        var el = s && s.chalkElements ? s.chalkElements.find(function(e) { return e.id === id; }) : null;
+        if (el) {
+            document.getElementById('chk-prop-content').value = el.content;
+            document.getElementById('chk-color-select').value = el.color;
+            propsBar.style.display = 'flex';
+        }
+    } else {
+        propsBar.style.display = 'none';
+    }
+}
+
+// 更新属性
+function updateChalkProp(prop, value) {
+    if (!chkSelectedId) return;
+    var s = slides[currentSlide];
+    var el = s && s.chalkElements ? s.chalkElements.find(function(e) { return e.id === chkSelectedId; }) : null;
+    if (!el) return;
+    el[prop] = value;
+    renderSlide();
+}
+
+function deleteChalkElement() {
+    if (!chkSelectedId) return;
+    var s = slides[currentSlide];
+    if (s && s.chalkElements) {
+        s.chalkElements = s.chalkElements.filter(function(e) { return e.id !== chkSelectedId; });
+        chkSelectedId = null;
+        selectChalkElement(null);
+    }
+    renderSlide();
+}
+
+// 板书拖拽
+function chalkMouseDown(e) {
+    if (!e) e = window.event;
+    var target = e.target.closest ? e.target.closest('.chalk-abs-textbox') : null;
+    if (target) {
+        var id = target.getAttribute('data-chk-id');
+        if (id) {
+            selectChalkElement(id);
+            var page = document.getElementById('slide-page');
+            var rect = page.getBoundingClientRect();
+            var s = slides[currentSlide];
+            var el = s && s.chalkElements ? s.chalkElements.find(function(e) { return e.id === id; }) : null;
+            if (el) {
+                chkDragState = {
+                    id: id,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: el.x,
+                    origY: el.y,
+                    viewW: rect.width,
+                    viewH: rect.height
+                };
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            return;
+        }
+    }
+    // 点击空白处取消选中
+    selectChalkElement(null);
+}
+
+function chalkMouseMove(e) {
+    if (!e) e = window.event;
+    if (!chkDragState) return;
+    var ds = chkDragState;
+    var s = slides[currentSlide];
+    var el = s && s.chalkElements ? s.chalkElements.find(function(e) { return e.id === ds.id; }) : null;
+    if (!el) { chkDragState = null; return; }
+    var dx = (e.clientX - ds.startX) / ds.viewW;
+    var dy = (e.clientY - ds.startY) / ds.viewH;
+    el.x = Math.max(0, Math.min(1 - el.w, ds.origX + dx));
+    el.y = Math.max(0, Math.min(1 - el.h, ds.origY + dy));
+    renderSlide();
+    e.preventDefault();
+}
+
+function chalkMouseUp() {
+    if (chkDragState) {
+        chkDragState = null;
+    }
+}
+
+function getChalkSelectedProp(prop) {
+    if (!chkSelectedId) return null;
+    var s = slides[currentSlide];
+    var el = s && s.chalkElements ? s.chalkElements.find(function(e) { return e.id === chkSelectedId; }) : null;
+    return el ? el[prop] : null;
 }
 
 // ============ Audio Playback in Slideshow ============
