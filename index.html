@@ -1679,7 +1679,8 @@ function blobUrlToDataUrl(url) {
 // ============ Fixed Content ============
 const FIXED = {
     standVerse: '约翰福音 4:24',
-    standVerseText: '　神是个灵（或无个字），所以拜他的必须用心灵和诚实拜他。',
+    standVerseText: '　神是个灵，所以拜他的必须用心灵和诚实拜他。',
+    standVerseMeditation: '默想，向神献上感谢的祷告',
     welcome: '24',
     welcomeName: '你原来是宝贵的',
     welcomeLyrics: [
@@ -2844,7 +2845,7 @@ function renderSlide() {
             break;
         }
         case 'stand-up-fixed':
-            html = `<div class="s-title">请起立</div><div class="s-subtitle">${esc(FIXED.standVerse)}</div><div class="s-body">${esc(FIXED.standVerseText)}</div>`;
+            html = `<div class="s-title">请起立</div><div class="s-subtitle">${esc(FIXED.standVerse)}</div><div class="s-body">${esc(FIXED.standVerseText)}</div><div class="s-body" style="margin-top:1.5em;font-size:calc(clamp(20px,3.5vw,48px) * var(--fs-scale));color:var(--gold);">${esc(FIXED.standVerseMeditation)}</div>`;
             break;
         case 'psalm-title':
             html = `<div class="s-title">${esc(s.label)}</div>`;
@@ -3616,7 +3617,8 @@ async function generatePPT() {
                 case 'stand-up-fixed':
                     secTitle(slide, '请起立');
                     slide.addText(FIXED.standVerse, { x: 1, y: 2.0, w: 11.333, h: 0.8, fontSize: 22, color: G, align: 'center', fontFace: 'Microsoft YaHei' });
-                    slide.addText(FIXED.standVerseText, { x: 1, y: 3.0, w: 11.333, h: 3, fontSize: 28, color: W, align: 'center', fontFace: 'Microsoft YaHei', lineSpacing: 44 });
+                    slide.addText(FIXED.standVerseText, { x: 1, y: 3.0, w: 11.333, h: 2.5, fontSize: 28, color: W, align: 'center', fontFace: 'Microsoft YaHei', lineSpacing: 44 });
+                    slide.addText(FIXED.standVerseMeditation, { x: 1, y: 5.8, w: 11.333, h: 1, fontSize: 22, color: 'F5D76E', align: 'center', fontFace: 'Microsoft YaHei' });
                     break;
                 case 'psalm-title': secTitle(slide, s.label); break;
                 case 'psalm-content':
