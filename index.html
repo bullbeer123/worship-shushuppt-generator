@@ -545,56 +545,59 @@
             align-items: center;
             justify-content: center;
             position: relative;
-            padding: 5% 8%;
+            padding: 3% 5%;
             box-sizing: border-box;
             transition: opacity 0.4s ease;
             --fs-scale: 1;
             --lh: 1.6;
+            overflow: hidden;
         }
         .slide-page .s-title {
-            font-size: calc(clamp(24px, 4vw, 48px) * var(--fs-scale));
+            font-size: calc(clamp(24px, 5vw, 96px) * var(--fs-scale));
             color: #fff;
             font-weight: bold;
             text-align: center;
             line-height: var(--lh);
         }
         .slide-page .s-subtitle {
-            font-size: calc(clamp(18px, 2.8vw, 36px) * var(--fs-scale));
+            font-size: calc(clamp(18px, 3.5vw, 72px) * var(--fs-scale));
             color: #F5D76E;
             text-align: center;
-            margin-top: 8px;
+            margin-top: 6px;
             line-height: var(--lh);
         }
         .slide-page .s-body {
-            font-size: calc(clamp(18px, 3vw, 38px) * var(--fs-scale));
+            font-size: calc(clamp(18px, 4vw, 80px) * var(--fs-scale));
             color: #fff;
             text-align: center;
             line-height: var(--lh);
-            margin-top: 20px;
-            max-width: 90%;
+            margin-top: 14px;
+            max-width: 95%;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .slide-page .s-footer {
             position: absolute;
             bottom: 5%;
             left: 0; right: 0;
             text-align: center;
-            font-size: calc(clamp(12px, 1.4vw, 18px) * var(--fs-scale));
+            font-size: calc(clamp(12px, 2vw, 36px) * var(--fs-scale));
             color: #F5D76E;
             line-height: var(--lh);
         }
         .slide-page .s-cover-date {
-            font-size: calc(clamp(28px, 4.5vw, 56px) * var(--fs-scale));
+            font-size: calc(clamp(28px, 5.5vw, 96px) * var(--fs-scale));
             color: #fff;
             font-weight: bold;
             line-height: var(--lh);
         }
         .slide-page .s-cover-label {
-            font-size: calc(clamp(16px, 2.2vw, 28px) * var(--fs-scale));
+            font-size: calc(clamp(16px, 2.8vw, 48px) * var(--fs-scale));
             color: #F5D76E;
             line-height: var(--lh);
         }
         .slide-page .s-cover-title {
-            font-size: calc(clamp(22px, 3.5vw, 42px) * var(--fs-scale));
+            font-size: calc(clamp(22px, 4vw, 72px) * var(--fs-scale));
             color: #fff;
             font-weight: bold;
             text-align: center;
@@ -2823,7 +2826,7 @@ function renderSlide() {
         case 'cover': {
             const d = s.data;
             html = `<div class="s-cover-label">上周回顾</div>
-                <div class="s-body" style="margin-top:16px;font-size:calc(clamp(18px,2.8vw,36px) * var(--fs-scale));line-height:1.5;">${esc(d.lastweek)}</div>`;
+                <div class="s-body" style="margin-top:16px;font-size:calc(clamp(18px,3.5vw,64px) * var(--fs-scale));line-height:1.5;">${esc(d.lastweek)}</div>`;
             break;
         }
         case 'date-title': {
@@ -2850,16 +2853,16 @@ function renderSlide() {
             html = `<div class="s-body" style="margin-top:0;font-size:${autoVerseFontSize(s.text)};">${esc(s.text)}</div>`;
             break;
         case 'hymn':
-            html = `<div class="s-title">${esc(s.label)}</div><div class="s-body" style="font-size:calc(clamp(27px,4.8vw,60px) * var(--fs-scale));">${esc(s.text)}</div>`;
+            html = `<div class="s-title">${esc(s.label)}</div><div class="s-body" style="font-size:calc(clamp(27px,5.5vw,80px) * var(--fs-scale));">${esc(s.text)}</div>`;
             break;
         case 'creed-title':
             html = `<div class="s-title">信仰告白</div><div class="s-subtitle">使徒信经</div>`;
             break;
         case 'creed':
-            html = `<div class="s-body" style="margin-top:0;font-size:calc(clamp(26px,4vw,54px) * var(--fs-scale));">${esc(s.text)}</div>`;
+            html = `<div class="s-body" style="margin-top:0;font-size:calc(clamp(26px,5vw,80px) * var(--fs-scale));">${esc(s.text)}</div>`;
             break;
         case 'lyrics':
-            html = `<div class="s-body" style="margin-top:0;font-size:calc(clamp(27px,4.8vw,60px) * var(--fs-scale));">${esc(s.text)}</div>`;
+            html = `<div class="s-body" style="margin-top:0;font-size:calc(clamp(27px,5.5vw,80px) * var(--fs-scale));">${esc(s.text)}</div>`;
             break;
         case 'sermon':
             html = `<div class="s-title">牧师证道</div><div class="s-subtitle">${esc(s.ref)}</div><div class="s-body">${esc(s.text)}</div>`;
@@ -2907,7 +2910,7 @@ function renderSlide() {
             break;
         }
         case 'ending':
-            html = `<div class="s-title" style="font-size:calc(clamp(36px,6vw,72px) * var(--fs-scale));text-shadow:0 2px 8px rgba(0,0,0,0.6);">以马内利</div>`;
+            html = `<div class="s-title" style="font-size:calc(clamp(36px,7vw,110px) * var(--fs-scale));text-shadow:0 2px 8px rgba(0,0,0,0.6);">以马内利</div>`;
             const endBgUrl = endingImgUrl || DEFAULT_ENDING_BG_DATA;
             page.style.backgroundImage = "url('" + endBgUrl + "')";
             page.style.backgroundSize = 'cover';
@@ -3521,7 +3524,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 // ============ Font & Line Height Adjust ============
-let fontScale = 1.0;   // 0.5 ~ 2.0，步长 0.1
+let fontScale = 1.0;   // 0.5 ~ 5.0，步长 0.2
 let lineHeight = 1.6;  // 1.0 ~ 3.0，步长 0.1
 
 function applyAdjust() {
@@ -3533,7 +3536,7 @@ function applyAdjust() {
 }
 
 function adjustFont(dir) {
-    fontScale = Math.min(2.0, Math.max(0.5, Math.round((fontScale + dir * 0.1) * 10) / 10));
+    fontScale = Math.min(5.0, Math.max(0.5, Math.round((fontScale + dir * 0.2) * 10) / 10));
     applyAdjust();
 }
 
