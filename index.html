@@ -865,7 +865,7 @@
         .chalk-abs-textbox {
             position: absolute;
             background: rgba(255,255,255,0.10);
-            border: 2px solid rgba(255,255,255,0.18);
+            border: 2px solid transparent;
             border-radius: 10px;
             color: #fff;
             line-height: 1.4;
@@ -877,11 +877,17 @@
             overflow: hidden;
             box-sizing: border-box;
             user-select: none;
-            transition: border-color 0.2s;
+            outline: none;
         }
         .chalk-abs-textbox.chk-selected {
             border-color: #F5D76E;
             box-shadow: 0 0 0 2px rgba(245,215,110,0.3);
+        }
+        .chalk-abs-textbox.chk-editing {
+            border-color: rgba(255,255,255,0.35);
+            background: rgba(255,255,255,0.18);
+            user-select: text;
+            cursor: text;
         }
 
         .example-toggle {
@@ -2899,20 +2905,20 @@ function renderSlide() {
             var chalkEls = s.chalkElements || [];
             var chalkHtml = '';
             if (chalkEls.length > 0) {
-                chalkHtml = '<div style="position:relative;width:100%;height:100%;">';
+                chalkHtml = '<div style="position:relative;width:100%;height:100%;" class="chalk-layer">';
                 for (var ci = 0; ci < chalkEls.length; ci++) {
                     var el = chalkEls[ci];
                     if (el.type === 'text') {
                         var selClass = (el.id === chkSelectedId) ? ' chk-selected' : '';
                         var fw = el.bold ? 'bold' : 'normal';
-                        chalkHtml += '<div class="chalk-abs-textbox' + selClass + '" data-chk-id="' + el.id + '" style="left:' + (el.x * 100) + '%;top:' + (el.y * 100) + '%;width:' + (el.w * 100) + '%;height:' + (el.h * 100) + '%;font-size:calc(clamp(16px,' + (el.fontSize / 4) + 'vw,' + el.fontSize + 'px) * var(--fs-scale));color:' + (el.color || '#fff') + ';font-weight:' + fw + ';text-align:' + (el.align || 'center') + ';cursor:move;">' + esc(el.content || '') + '</div>';
+                        chalkHtml += '<div class="chalk-abs-textbox' + selClass + '" data-chk-id="' + el.id + '" style="left:' + (el.x * 100) + '%;top:' + (el.y * 100) + '%;width:' + (el.w * 100) + '%;height:' + (el.h * 100) + '%;font-size:calc(clamp(16px,' + (el.fontSize / 4) + 'vw,' + el.fontSize + 'px) * var(--fs-scale));color:' + (el.color || '#fff') + ';font-weight:' + fw + ';text-align:' + (el.align || 'center') + ';cursor:move;" tabindex="0">' + esc(el.content || (el.id === chkSelectedId ? '双击输入文字' : '')) + '</div>';
                     }
                 }
                 chalkHtml += '</div>';
             } else {
                 chalkHtml = '';
             }
-            html = '<div class="s-title" style="color:#fff;position:relative;z-index:2;">板书</div><div class="s-subtitle" style="color:#ccc;position:relative;z-index:2;">' + esc(s.label) + '</div>' + chalkHtml;
+            html = '<div class="s-title" style="color:#fff;position:relative;z-index:2;">板书</div><div class="s-subtitle" style="color:#e0e0e0;position:relative;z-index:2;">' + esc(s.label) + '</div>' + chalkHtml;
             page.style.background = '#1a1a1a';
             page.style.backgroundImage = '';
             // 绑定鼠标事件（拖拽移动）
@@ -2921,6 +2927,30 @@ function renderSlide() {
             page.onmouseup = function() { chalkMouseUp(); };
             page.onmouseleave = function() { chalkMouseUp(); };
             page.onclick = function(e) { if (e) e.stopPropagation(); };
+            // 双击文本框直接编辑文字
+            page.ondblclick = function(e) {
+                var target = e.target.closest ? e.target.closest('.chalk-abs-textbox') : null;
+                if (!target) return;
+                var id = target.getAttribute('data-chk-id');
+                if (!id) return;
+                e.stopPropagation();
+                chalkEnterEdit(id);
+            };
+            // 失去焦点保存编辑内容（focusout会冒泡，适合事件委托）
+            page.onfocusout = function(e) {
+                var target = e.target.closest ? e.target.closest('.chalk-abs-textbox') : null;
+                if (!target || target.contentEditable !== 'true') return;
+                var id = target.getAttribute('data-chk-id');
+                if (id) {
+                    var curs = slides[currentSlide];
+                    var el = curs && curs.chalkElements ? curs.chalkElements.find(function(ce) { return ce.id === id; }) : null;
+                    if (el) {
+                        el.content = target.textContent.trim();
+                    }
+                }
+                target.contentEditable = 'false';
+                target.classList.remove('chk-editing');
+            };
             // 显示板书输入栏
             document.getElementById('chalk-input-bar').style.display = 'flex';
             break;
@@ -3052,17 +3082,40 @@ function chalkAddText(initialContent) {
         });
         chkSelectedId = s.chalkElements[s.chalkElements.length - 1].id;
         renderSlide();
-        // 选中后自动弹出属性栏并聚焦内容编辑框
+        // 自动进入编辑模式
         setTimeout(function() {
             var propsBar = document.getElementById('chalk-props-bar');
             if (propsBar) propsBar.style.display = 'flex';
-            var contentInput = document.getElementById('chk-prop-content');
-            if (contentInput) {
-                contentInput.value = '';
-                contentInput.focus();
+            var page = document.getElementById('slide-page');
+            if (page) {
+                var allTb = page.querySelectorAll('.chalk-abs-textbox');
+                var newEl = allTb[allTb.length - 1];
+                if (newEl) {
+                    var id = newEl.getAttribute('data-chk-id');
+                    if (id) chalkEnterEdit(id);
+                }
             }
         }, 50);
     }
+}
+
+// 双击文本框进入编辑模式
+function chalkEnterEdit(id) {
+    if (!id) return;
+    selectChalkElement(id);
+    var page = document.getElementById('slide-page');
+    var el = page.querySelector('.chalk-abs-textbox[data-chk-id="' + id + '"]');
+    if (!el) return;
+    el.contentEditable = 'true';
+    el.classList.add('chk-editing');
+    el.focus();
+    // 光标放到末尾
+    var range = document.createRange();
+    var sel = window.getSelection();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
 }
 
 function chalkAddPage() {
