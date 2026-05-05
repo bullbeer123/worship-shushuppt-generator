@@ -2905,20 +2905,18 @@ function renderSlide() {
             var chalkEls = s.chalkElements || [];
             var chalkHtml = '';
             if (chalkEls.length > 0) {
-                chalkHtml = '<div style="position:relative;width:100%;height:100%;" class="chalk-layer">';
+                chalkHtml = '<div style="position:relative;width:100%;height:100%;">';
                 for (var ci = 0; ci < chalkEls.length; ci++) {
                     var el = chalkEls[ci];
                     if (el.type === 'text') {
                         var selClass = (el.id === chkSelectedId) ? ' chk-selected' : '';
                         var fw = el.bold ? 'bold' : 'normal';
-                        chalkHtml += '<div class="chalk-abs-textbox' + selClass + '" data-chk-id="' + el.id + '" style="left:' + (el.x * 100) + '%;top:' + (el.y * 100) + '%;width:' + (el.w * 100) + '%;height:' + (el.h * 100) + '%;font-size:calc(clamp(16px,' + (el.fontSize / 4) + 'vw,' + el.fontSize + 'px) * var(--fs-scale));color:' + (el.color || '#fff') + ';font-weight:' + fw + ';text-align:' + (el.align || 'center') + ';cursor:move;" tabindex="0">' + esc(el.content || (el.id === chkSelectedId ? '双击输入文字' : '')) + '</div>';
+                        chalkHtml += '<div class="chalk-abs-textbox' + selClass + '" data-chk-id="' + el.id + '" style="left:' + (el.x * 100) + '%;top:' + (el.y * 100) + '%;width:' + (el.w * 100) + '%;height:' + (el.h * 100) + '%;font-size:calc(clamp(16px,' + (el.fontSize / 4) + 'vw,' + el.fontSize + 'px) * var(--fs-scale));color:' + (el.color || '#fff') + ';font-weight:' + fw + ';text-align:' + (el.align || 'center') + ';cursor:move;">' + esc(el.content || '') + '</div>';
                     }
                 }
                 chalkHtml += '</div>';
-            } else {
-                chalkHtml = '';
             }
-            html = '<div class="s-title" style="color:#fff;position:relative;z-index:2;">板书</div><div class="s-subtitle" style="color:#e0e0e0;position:relative;z-index:2;">' + esc(s.label) + '</div>' + chalkHtml;
+            html = chalkHtml;
             page.style.background = '#1a1a1a';
             page.style.backgroundImage = '';
             // 绑定鼠标事件（拖拽移动）
@@ -3887,9 +3885,23 @@ async function generatePPT() {
                     break;
                 case 'sermon-chalkboard':
                     slide.background = { color: '1A1A1A' };
-                    slide.addText('板书', { x: 0, y: 0.8, w: 13.333, h: 1.2, fontSize: 36, color: 'FFFFFF', align: 'center', bold: true, fontFace: 'Microsoft YaHei' });
-                    // 空白板书页，播放时添加文本框
-                    slide.addText('（播放时点击添加文本框）', { x: 0.8, y: 3.0, w: 11.733, h: 1, fontSize: 22, color: '666666', align: 'center', fontFace: 'Microsoft YaHei' });
+                    if (s.chalkElements && s.chalkElements.length > 0) {
+                        s.chalkElements.forEach(function(el) {
+                            if (el.type === 'text' && el.content) {
+                                slide.addText(el.content, {
+                                    x: el.x * 13.333, y: el.y * 7.5, w: el.w * 13.333, h: el.h * 7.5,
+                                    fontSize: Math.min(el.fontSize || 28, 72),
+                                    color: el.color || 'FFFFFF',
+                                    bold: el.bold || false,
+                                    align: el.align || 'center',
+                                    valign: 'middle',
+                                    fontFace: 'Microsoft YaHei',
+                                    lineSpacing: Math.round((el.fontSize || 28) * 1.4),
+                                    wordWrap: true,
+                                });
+                            }
+                        });
+                    }
                     break;
                 case 'simple': secTitle(slide, s.title); break;
                 case 'forum':
