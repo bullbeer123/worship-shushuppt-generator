@@ -3286,10 +3286,13 @@ function formatTime(sec) {
 }
 
 // ============ Fullscreen ============
+let savedFontScale = null; // 全屏前保存的字体缩放值
+
 function toggleFullscreen() {
     const el = document.getElementById('slideshow-overlay');
     const btn = document.getElementById('btn-fullscreen');
     if (!document.fullscreenElement) {
+        savedFontScale = fontScale; // 保存当前缩放值
         el.requestFullscreen && el.requestFullscreen();
         btn.textContent = '⛶ 退出全屏';
     } else {
@@ -3297,9 +3300,35 @@ function toggleFullscreen() {
         btn.textContent = '⛶ 全屏';
     }
 }
+
+function applyBestScale() {
+    // 参考WPS Word"最佳显示比例"：根据屏幕宽度自动匹配最佳缩放
+    const container = document.getElementById('slide-page');
+    if (!container) return;
+    const w = container.clientWidth;
+    // 设计参考宽度1920px（clamp上限匹配的屏幕尺寸）
+    const refWidth = 1920;
+    if (w <= refWidth) return; // 屏幕小于参考值，不缩放
+    const best = Math.min(5.0, Math.max(1.0, Math.round((w / refWidth) * 10) / 10));
+    if (best > fontScale) {
+        fontScale = best;
+        applyAdjust();
+    }
+}
+
 document.addEventListener('fullscreenchange', () => {
     const btn = document.getElementById('btn-fullscreen');
     if (btn) btn.textContent = document.fullscreenElement ? '⛶ 退出全屏' : '⛶ 全屏';
+    
+    if (document.fullscreenElement) {
+        // 进入全屏 → 短暂延迟等待浏览器完成全屏布局，再计算最佳比例
+        setTimeout(applyBestScale, 80);
+    } else if (savedFontScale !== null) {
+        // 退出全屏 → 恢复之前的缩放值
+        fontScale = savedFontScale;
+        applyAdjust();
+        savedFontScale = null;
+    }
 });
 
 // ============ Audio Replay ============
