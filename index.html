@@ -2938,6 +2938,9 @@ function renderSlide() {
             page.onfocusout = function(e) {
                 var target = e.target.closest ? e.target.closest('.chalk-abs-textbox') : null;
                 if (!target || target.contentEditable !== 'true') return;
+                // 如果新焦点也在同一个黑板内（如点击另一个文本框），不退出编辑模式
+                var related = e.relatedTarget;
+                if (related && related.closest && related.closest('#slide-page')) return;
                 var id = target.getAttribute('data-chk-id');
                 if (id) {
                     var curs = slides[currentSlide];
@@ -3798,8 +3801,7 @@ function adjustLine(dir) {
 document.addEventListener('keydown', e => {
     if (!document.getElementById('slideshow-overlay').classList.contains('show')) return;
     // 如果在可编辑元素（板书文本框）中，不触发翻页，让原生的Enter/箭头等生效
-    var active = document.activeElement;
-    if (active && (active.contentEditable === 'true' || active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    if (e.target && (e.target.contentEditable === 'true' || (e.target.closest && e.target.closest('[contentEditable=true]')))) return;
     // 下一页：右箭头 / 下箭头 / 空格 / Enter / PageDown（激光笔常用）
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ' || e.key === 'Enter' || e.key === 'PageDown') {
         e.preventDefault(); nextSlide();
