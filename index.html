@@ -1440,7 +1440,7 @@
             <button onclick="chalkSaveScreenshot()">📸 截图保存</button>
         </div>
         <div class="chalk-props-row" id="chalk-props-bar">
-            <input type="text" id="chk-prop-content" onchange="updateChalkProp('content',this.value)" placeholder="文字内容">
+            <span style="color:#aaa;font-size:13px;">选中文本框，双击编辑文字</span>
             <button onclick="updateChalkProp('fontSize',Math.min(72,(getChalkSelectedProp('fontSize')||28)+4))" title="增大字号">A+</button>
             <button onclick="updateChalkProp('fontSize',Math.max(12,(getChalkSelectedProp('fontSize')||28)-4))" title="减小字号">A-</button>
             <select id="chk-color-select" onchange="updateChalkProp('color',this.value)">
@@ -3146,7 +3146,6 @@ function selectChalkElement(id) {
         var s = slides[currentSlide];
         var el = s && s.chalkElements ? s.chalkElements.find(function(e) { return e.id === id; }) : null;
         if (el) {
-            document.getElementById('chk-prop-content').value = el.content;
             document.getElementById('chk-color-select').value = el.color;
             propsBar.style.display = 'flex';
         }
