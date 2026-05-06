@@ -878,14 +878,19 @@
             box-sizing: border-box;
             user-select: none;
             outline: none;
+            transition: background 0.25s, border-color 0.25s, box-shadow 0.25s;
+        }
+        .chalk-abs-textbox:hover {
+            background: rgba(255,255,255,0.14);
+            border-color: rgba(255,255,255,0.10);
         }
         .chalk-abs-textbox.chk-selected {
             border-color: #F5D76E;
             box-shadow: 0 0 0 2px rgba(245,215,110,0.3);
         }
         .chalk-abs-textbox.chk-editing {
-            border-color: rgba(255,255,255,0.35);
-            background: rgba(255,255,255,0.18);
+            border-color: #F5D76E;
+            background: rgba(245,215,118,0.10);
             user-select: text;
             cursor: text;
         }
@@ -1433,14 +1438,12 @@
     <!-- 板书输入栏（播放中编辑） -->
     <div class="chalk-input-bar" id="chalk-input-bar" onclick="event.stopPropagation()">
         <div class="chalk-input-row">
-            <span style="color:#aaa;font-size:13px;">点击「添加文本框」后编辑文字</span>
             <button onclick="chalkAddText()">➕ 添加文本框</button>
             <button onclick="chalkClear()">🗑 清空</button>
             <button onclick="chalkAddPage()">📄 加页</button>
             <button onclick="chalkSaveScreenshot()">📸 截图保存</button>
         </div>
         <div class="chalk-props-row" id="chalk-props-bar">
-            <span style="color:#aaa;font-size:13px;">选中文本框，双击编辑文字</span>
             <button onclick="updateChalkProp('fontSize',Math.min(72,(getChalkSelectedProp('fontSize')||28)+4))" title="增大字号">A+</button>
             <button onclick="updateChalkProp('fontSize',Math.max(12,(getChalkSelectedProp('fontSize')||28)-4))" title="减小字号">A-</button>
             <select id="chk-color-select" onchange="updateChalkProp('color',this.value)">
@@ -2745,8 +2748,8 @@ function buildSlides(data) {
                 slides.push({ type: 'sermon-verse', label: label, text: verse });
             }
         }
-        // 板书功能暂时下线（后续恢复）
-        // slides.push({ type: 'sermon-chalkboard', label: label + ' 板书', text: '', chalkElements: [] });
+        // 板书页面（双经文本框编辑文字）
+        slides.push({ type: 'sermon-chalkboard', label: label + ' 板书', text: '', chalkElements: [] });
     });
     // 自定义页面（证道之后）
     insertCP('证道');
