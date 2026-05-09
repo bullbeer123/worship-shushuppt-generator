@@ -2039,7 +2039,10 @@ async function parseText() {
         return;
     }
 
-    // ★ 尝试浏览器内置AI解析（安静，不打扰用户）
+    // ★ 尝试浏览器内置AI解析（显示加载中提示，让用户知道AI在工作）
+    document.getElementById('loading').classList.add('show');
+    document.getElementById('loading-text').textContent = '🤖 AI智能解析中...';
+    var aiUsed = false;
     try {
         var ai = window.ai;
         if (ai && ai.languageModel) {
@@ -2056,15 +2059,20 @@ async function parseText() {
                     var result = JSON.parse(jsonMatch ? jsonStr : (braceMatch ? braceMatch[0] : jsonStr));
                     if (result.sermon1 || result.praise1) {
                         fillAIParseResult(result);
-                        showToast('✅ 解析完成');
+                        document.getElementById('loading').classList.remove('show');
+                        showToast('✅ AI解析完成');
                         document.getElementById('edit-section').style.display = 'block';
                         document.getElementById('edit-section').scrollIntoView({ behavior: 'smooth' });
+                        return;
                         return;
                     }
                 }
             }
         }
     } catch (e) { /* AI失败→静默走正则 */ }
+
+    // AI不可用或失败 → 转正则解析
+    document.getElementById('loading-text').textContent = '📝 正则解析中...';
 
     // 正则解析（AI不可用或返回结果不对时自动降级）
     // 0. 微信连续文本预处理
@@ -2267,9 +2275,10 @@ async function parseText() {
     parse777AndShowButtons(document.getElementById('f-declaration').value);
 
     // Show edit section
+    document.getElementById('loading').classList.remove('show');
     document.getElementById('edit-section').style.display = 'block';
     document.getElementById('edit-section').scrollIntoView({ behavior: 'smooth' });
-    showToast('✅ 内容已解析，请检查修改');
+    showToast('✅ 解析完成（正则）');
 
     // 8. 纯数字的赞美/新编字段自动补全为"编号 歌名"
     await autoCompletePureNumbers();
