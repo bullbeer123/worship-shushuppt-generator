@@ -1148,6 +1148,7 @@
         <div class="step-title">
             <span class="step-num">1</span>
             粘贴礼拜内容
+            <span id="ai-badge" class="ai-badge-off" style="display:inline-block;font-size:11px;padding:1px 10px;border-radius:10px;margin-left:8px;vertical-align:middle;font-weight:normal;transition:0.3s;">⏳ 检测AI...</span>
         </div>
         <textarea class="paste-area" id="paste-area" placeholder="把手机备忘录里的文字直接粘贴到这里...&#10;&#10;格式示例：&#10;Sunday worship 2026.4.12&#10;题目&#10;撒上16:1-13要拯救世界的圣殿的开始&#10;创4:16-16、5:1-32血统&#10;赞美:76人生理由，131望楼的祷告&#10;诗篇:23篇&#10;论坛(提问):&#10;大卫因没有圣殿而哭，我在为什么哭?&#10;777的祷告-绝对望楼"></textarea>
         <div class="paste-hint">
@@ -1173,9 +1174,6 @@
         <button class="btn-parse" onclick="parseText()">
             ✨ 解析内容
         </button>
-        <div class="paste-hint" style="margin-top:4px;">
-            解析异常？用电脑版 <b>Chrome</b> 或 <b>Edge</b> 浏览器打开，可启用AI智能解析，识别更准
-        </div>
     </div>
 
     <!-- Step 2: Edit -->
@@ -3879,7 +3877,49 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }, 3000); // 延迟3秒，等页面交互稳定后再预热
 
+    // 检测浏览器内置AI，更新首页徽章
+    updateAIBadge();
 });
+
+// 首页AI状态徽章（一直显示，让用户清楚AI是否可用）
+async function updateAIBadge() {
+    var badge = document.getElementById('ai-badge');
+    if (!badge) return;
+    try {
+        var ai = window.ai;
+        if (!ai || !ai.languageModel) {
+            badge.textContent = '💡 推荐用Chrome/Edge开启AI智能解析';
+            badge.className = 'ai-badge-off';
+            badge.style.background = 'rgba(255,255,255,0.08)';
+            badge.style.color = '#8b7a96';
+            return;
+        }
+        var caps = await ai.languageModel.capabilities();
+        if (caps.available === 'readily') {
+            badge.textContent = '✨ AI已就绪';
+            badge.className = 'ai-badge-on';
+            badge.style.background = 'rgba(74,222,128,0.2)';
+            badge.style.color = '#4ade80';
+        } else if (caps.available === 'after-download') {
+            badge.textContent = '⏳ 需下载AI模型(约10秒)';
+            badge.className = 'ai-badge-dl';
+            badge.style.background = 'rgba(245,215,118,0.2)';
+            badge.style.color = '#F5D76E';
+            // 自动触发下载（浏览器静默下载）
+            ai.languageModel.create({ systemPrompt: '' }).then(s => s.destroy()).catch(() => {});
+        } else {
+            badge.textContent = '💡 推荐用Chrome/Edge开启AI智能解析';
+            badge.className = 'ai-badge-off';
+            badge.style.background = 'rgba(255,255,255,0.08)';
+            badge.style.color = '#8b7a96';
+        }
+    } catch (e) {
+        badge.textContent = '💡 推荐用Chrome/Edge开启AI智能解析';
+        badge.className = 'ai-badge-off';
+        badge.style.background = 'rgba(255,255,255,0.08)';
+        badge.style.color = '#8b7a96';
+    }
+}
 
 
 // ============ Font & Line Height Adjust ============
