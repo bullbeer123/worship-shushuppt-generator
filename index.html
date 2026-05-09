@@ -2065,45 +2065,61 @@ async function parseText() {
     if (dateMatch) date = dateMatch[1] + '.' + dateMatch[2] + '.' + dateMatch[3];
     document.getElementById('f-date').value = date;
 
-    // 1.5 上周内容: "上周:xxxx" — everything after "上周:" until "题目" keyword
-    const lastweekMatch = raw.match(/上周\s*[：:]\s*([\s\S]*?)题目/m);
-    if (lastweekMatch) {
-        // Clean up: merge all lines into one paragraph
-        const text = lastweekMatch[1].replace(/\s+/g, '').replace(/[（(]/g, '（').replace(/[）)]/g, '）').replace(/[:：]/g, '：');
+    // 1.5 上周内容: "上周:xxxx" — 终止于下一节关键字（圣经书卷/赞美/诗篇/论坛等）
+    const sectionEndRx = /(?=创|出|利|民|申|书|士|得|撒上|撒下|王上|王下|代上|代下|拉|尼|斯|伯|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启|赞美|诗篇|新编|论坛|题目)/;
+    const lastweekAll = raw.match(/上周\s*[：:]\s*([\s\S]*?)(?=创|出|利|民|申|书|士|得|撒上|撒下|王上|王下|代上|代下|拉|尼|斯|伯|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启|赞美|诗篇|新编|论坛|题目)/m);
+    if (lastweekAll) {
+        const text = lastweekAll[1].replace(/\s+/g, '').replace(/[（(]/g, '（').replace(/[）)]/g, '）').replace(/[:：]/g, '：');
         document.getElementById('f-lastweek').value = text;
     }
 
-    // 2. Sermons (证道): after "题目", each starting with a Bible book abbreviation
-    //    连续文本中可能粘在一行: "可16:15-20xxx创6:14-22xxx"
-    //    需要在行内也检测圣经书卷切换点
+    // 2. Sermons (证道): 在 上周之后/全文 中找到圣经引用作为证道起点
+    //    不依赖"题目"关键字，直接找圣经书卷+章节
     let title1 = '', title2 = '';
-    const afterTitle = raw.split(/题目\s*/);
-    if (afterTitle.length >= 2) {
-        const restOfText = afterTitle[1];
-        const bibleBooks = '(创|出|利|民|申|书|士|得|撒上|撒下|王上|王下|代上|代下|拉|尼|斯|伯|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)';
-        const sectionRx = /(赞美|诗篇|新编|论坛|777|Sunday)/;
-        // 找到所有圣经引用的起始位置
+    const bibleBooks = '(创|出|利|民|申|书|士|得|撒上|撒下|王上|王下|代上|代下|拉|尼|斯|伯|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启)';
+    const sectionRx = /(赞美|诗篇|新编|论坛|777|Sunday)/;
+
+    // 获取"讲题区域"：从"题目"关键字或第一个圣经引用开始，到"赞美"/"诗篇"/"论坛"结束
+    let sermonZone = '';
+    const afterTitleSplit = raw.split(/题目\s*/);
+    if (afterTitleSplit.length >= 2) {
+        sermonZone = afterTitleSplit[1];
+    } else {
+        // 没有"题目"关键字 → 从第一个圣经引用开始截取到赞美/诗篇等
+        const firstRef = raw.match(new RegExp(bibleBooks + '\\d', 'g'));
+        if (firstRef) {
+            const refIdx = raw.search(new RegExp(bibleBooks + '\\d'));
+            if (refIdx >= 0) {
+                const endIdx = raw.search(/(赞美|诗篇|新编赞美|论坛)/);
+                sermonZone = raw.substring(refIdx, endIdx >= 0 ? endIdx : raw.length);
+            }
+        }
+        // 如果还没有内容，再尝试取"上周"之后到赞美之间的文本
+        if (!sermonZone) {
+            const lwIdx = raw.indexOf('上周');
+            if (lwIdx >= 0) {
+                const afterLW = raw.substring(lwIdx + 2);
+                const endIdx = afterLW.search(/(赞美|诗篇|新编赞美|论坛)/);
+                sermonZone = afterLW.substring(0, endIdx >= 0 ? endIdx : afterLW.length);
+            }
+        }
+    }
+
+    // 在讲题区域中找圣经引用
+    if (sermonZone) {
         const refRx = new RegExp(bibleBooks + '\\d', 'g');
         let match;
         const sermonStarts = [];
-        while ((match = refRx.exec(restOfText)) !== null) {
-            // 检查这个引用前面是否是章节关键字（如果是则停止）
-            const before = restOfText.substring(Math.max(0, match.index - 20), match.index);
+        while ((match = refRx.exec(sermonZone)) !== null) {
+            const before = sermonZone.substring(Math.max(0, match.index - 20), match.index);
             if (sectionRx.test(before)) break;
             sermonStarts.push(match.index);
         }
-        // 取前两个作为证道1和证道2
         if (sermonStarts.length >= 2) {
-            // 截取到赞美/诗篇等关键字前
-            let endIdx = restOfText.length;
-            const secMatch = restOfText.match(/(赞美|诗篇|新编赞美|论坛)/);
-            if (secMatch) endIdx = secMatch.index;
-            title1 = restOfText.substring(sermonStarts[0], sermonStarts[1]).trim();
-            title2 = restOfText.substring(sermonStarts[1], endIdx).trim();
+            title1 = sermonZone.substring(sermonStarts[0], sermonStarts[1]).trim();
+            title2 = sermonZone.substring(sermonStarts[1]).trim();
         } else if (sermonStarts.length === 1) {
-            const secMatch = restOfText.match(/(赞美|诗篇|新编赞美|论坛)/);
-            const endIdx = secMatch ? secMatch.index : restOfText.length;
-            title1 = restOfText.substring(sermonStarts[0], endIdx).trim();
+            title1 = sermonZone.substring(sermonStarts[0]).trim();
         }
     }
     document.getElementById('f-sermon1').value = mergeSermonTitle(title1);
@@ -2169,9 +2185,20 @@ async function parseText() {
         // 按换行分割
         const fParts = afterForum.split(/\n/).map(l => l.trim()).filter(Boolean);
         if (fParts.length >= 2) {
-            // 多行：第一段 = 论坛，剩余 = 777
-            forumText = fParts[0];
-            declText = fParts.slice(1).join('\n');
+            // 多行：查找777宣告起始行（按特征关键字），在其之前为论坛、之后为777宣告
+            const declKeywords = /建立神国|准备300|形成3Camp|医治伟人|宝座的望楼|300%|\.3camp|里程碑|伟大事工|绝对望楼|绝对旅程|绝对里程碑/i;
+            var declLineIdx = -1;
+            for (var fi = 0; fi < fParts.length; fi++) {
+                if (declKeywords.test(fParts[fi])) { declLineIdx = fi; break; }
+            }
+            if (declLineIdx > 0) {
+                forumText = fParts.slice(0, declLineIdx).join('\n');
+                declText = fParts.slice(declLineIdx).join('\n');
+            } else {
+                // 找不到特征关键字：第一段 = 论坛，剩余 = 777
+                forumText = fParts[0];
+                declText = fParts.slice(1).join('\n');
+            }
         } else if (fParts.length === 1) {
             const line = fParts[0];
             // 单行：按第一个中文句号"。"分割
