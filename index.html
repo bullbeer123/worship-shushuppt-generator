@@ -1173,10 +1173,6 @@
         <button class="btn-parse" onclick="parseText()">
             ✨ 解析内容
         </button>
-        <button class="btn-ai-parse" id="btn-ai-parse" onclick="aiParseText()" style="display:none;">
-            🤖 AI智能解析
-        </button>
-        <span id="ai-status" style="font-size:12px;color:#8b7a96;margin-left:8px;"></span>
     </div>
 
     <!-- Step 2: Edit -->
@@ -2040,6 +2036,34 @@ async function parseText() {
         return;
     }
 
+    // ★ 尝试浏览器内置AI解析（安静，不打扰用户）
+    try {
+        var ai = window.ai;
+        if (ai && ai.languageModel) {
+            var caps = await ai.languageModel.capabilities();
+            if (caps.available === 'readily' || caps.available === 'after-download') {
+                var systemMsg = '你是一个礼拜PPT解析助手。请将礼拜文字解析为JSON格式。只输出JSON，不要多余文字，不要markdown包裹。字段: date(日期), lastweek(上周内容合并一行), sermon1(第一讲经文引用+标题), sermon2(第二讲), praise1(第一首赞美), praise2(第二首), psalm(诗篇编号), hymn1(新编赞美1编号), hymn2(新编赞美2编号), forum(论坛内容), declaration(777宣告)。没有就留空字符串。';
+                var session = await ai.languageModel.create({ systemPrompt: systemMsg });
+                var content = await session.prompt('解析这段礼拜文字:\n\n' + raw);
+                session.destroy();
+                if (content) {
+                    var jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+                    var jsonStr = jsonMatch ? jsonMatch[1] : content;
+                    var braceMatch = content.match(/\{[\s\S]*\}/);
+                    var result = JSON.parse(jsonMatch ? jsonStr : (braceMatch ? braceMatch[0] : jsonStr));
+                    if (result.sermon1 || result.praise1) {
+                        fillAIParseResult(result);
+                        showToast('✅ 解析完成');
+                        document.getElementById('edit-section').style.display = 'block';
+                        document.getElementById('edit-section').scrollIntoView({ behavior: 'smooth' });
+                        return;
+                    }
+                }
+            }
+        }
+    } catch (e) { /* AI失败→静默走正则 */ }
+
+    // 正则解析（AI不可用或返回结果不对时自动降级）
     // 0. 微信连续文本预处理
     //    微信提取的文字常把所有内容压成一行（换行丢失）
     //    在关键字前插入换行，让后续正则正常工作
@@ -2248,54 +2272,7 @@ async function parseText() {
     await autoCompletePureNumbers();
 }
 
-// ============ AI智能解析 ============
-// ============ AI智能解析（浏览器内置AI，无需API） ============
-async function aiParseText() {
-    var raw = document.getElementById('paste-area').value;
-    if (!raw.trim()) { showToast('请先粘贴礼拜内容', true); return; }
-
-    // 检测浏览器内置AI
-    var ai = window.ai;
-    if (!ai) { showToast('本浏览器不支持内置AI，已使用正则解析', true); parseText(); return; }
-
-    document.getElementById('loading').classList.add('show');
-    document.getElementById('loading-text').textContent = 'AI正在智能解析...';
-
-    try {
-        var systemMsg = '你是一个礼拜PPT解析助手。请将礼拜文字解析为JSON格式。只输出JSON，不要多余文字，不要markdown包裹。字段: date(日期), lastweek(上周内容合并为一行), sermon1(第一讲经文引用+标题), sermon2(第二讲经文引用+标题), praise1(第一首赞美编号+歌名), praise2(第二首), psalm(诗篇编号纯数字), hymn1(新编赞美1编号), hymn2(新编赞美2编号), forum(论坛提问内容), declaration(777宣告内容)。没有对应字段就留空字符串。';
-
-        var userMsg = '解析这段礼拜文字:\n\n' + raw;
-
-        var session = await ai.languageModel.create({ systemPrompt: systemMsg });
-        var content = await session.prompt(userMsg);
-        session.destroy();
-
-        if (!content) throw new Error('AI返回为空');
-
-        // 提取JSON（去掉可能的```标记）
-        var jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-        var jsonStr = jsonMatch ? jsonMatch[1] : content;
-        var result;
-        try { result = JSON.parse(jsonStr); }
-        catch (e) {
-            var braceMatch = content.match(/\{[\s\S]*\}/);
-            if (braceMatch) result = JSON.parse(braceMatch[0]);
-            else throw new Error('AI返回格式不对: ' + content.slice(0, 150));
-        }
-
-        // 填入表单
-        fillAIParseResult(result);
-        showToast('✅ AI解析完成，请检查修改');
-    } catch (e) {
-        console.error('AI Parse Error:', e);
-        showToast('AI解析失败(' + e.message + ')，已用正则备用', true);
-        parseText();
-    } finally {
-        document.getElementById('loading').classList.remove('show');
-    }
-}
-
-// AI解析结果填入表单（与api版共用）
+// AI解析结果填入表单
 function fillAIParseResult(result) {
     if (result.date && !document.getElementById('f-date').value)
         document.getElementById('f-date').value = result.date;
@@ -3890,35 +3867,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }, 3000); // 延迟3秒，等页面交互稳定后再预热
 
-    // 检测浏览器内置AI，可用则显示AI按钮
-    setTimeout(checkBuiltinAI, 500);
 });
-
-// 检测浏览器内置AI（Chrome Gemini Nano）
-async function checkBuiltinAI() {
-    var btn = document.getElementById('btn-ai-parse');
-    var status = document.getElementById('ai-status');
-    try {
-        var ai = window.ai;
-        if (!ai) { status.textContent = ''; return; }
-        var caps = await ai.languageModel.capabilities();
-        if (caps.available === 'readily') {
-            btn.style.display = 'inline-block';
-            status.textContent = '⚡ 内置AI可用';
-            status.style.color = '#4ade80';
-        } else if (caps.available === 'after-download') {
-            btn.style.display = 'inline-block';
-            btn.textContent = '🤖 下载AI模型后解析';
-            status.textContent = '⏳ 需下载AI(首次)';
-            status.style.color = '#F5D76E';
-        } else {
-            status.textContent = '浏览器AI不可用，已用正则';
-            status.style.color = '#8b7a96';
-        }
-    } catch (e) {
-        status.textContent = '';
-    }
-}
 
 
 // ============ Font & Line Height Adjust ============
