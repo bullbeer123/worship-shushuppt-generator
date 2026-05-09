@@ -3880,9 +3880,11 @@ window.addEventListener('DOMContentLoaded', () => {
     // 检测浏览器内置AI，更新首页徽章
     updateAIBadge();
 
-    // ★ 自动保存：编辑区任何字段变化都保存（防丢失、周日可直接恢复）
+    // ★ 自动保存 + 音频自动预下载
     var autoSaveTimer = null;
+    var autoAudioTimer = null;
     var autoSaveFields = ['f-date','f-lastweek','f-praise1','f-praise1-lyrics','f-praise2','f-praise2-lyrics','f-special','f-special-lyrics','f-psalm','f-psalm-content','f-hymn1','f-hymn1-lyrics','f-hymn2','f-hymn2-lyrics','f-sermon1','f-sermon2','f-forum','f-declaration'];
+    var audioFields = ['f-praise1','f-praise2','f-hymn1','f-hymn2'];
     autoSaveFields.forEach(function(id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('input', function() {
@@ -3891,7 +3893,17 @@ window.addEventListener('DOMContentLoaded', () => {
                 var data = collectSlideData();
                 saveRecord(data);
                 console.log('💾 自动保存');
-            }, 2000); // 输入停止2秒后保存，避免频繁写入
+            }, 2000);
+
+            // 赞美/新编字段：自动触发音频预下载（本地IndexedDB缓存）
+            if (audioFields.indexOf(id) >= 0) {
+                clearTimeout(autoAudioTimer);
+                autoAudioTimer = setTimeout(function() {
+                    var type = id.replace('f-', '');
+                    fetchLyricsSilent(type).catch(function() {});
+                    console.log('🎵 自动下载音频:', type);
+                }, 3000);
+            }
         });
     });
 
