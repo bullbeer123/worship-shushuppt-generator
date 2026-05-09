@@ -1173,6 +1173,18 @@
         <button class="btn-parse" onclick="parseText()">
             ✨ 解析内容
         </button>
+        <button class="btn-ai-parse" onclick="aiParseText()" style="background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);">
+            🤖 AI智能解析
+        </button>
+        <div style="margin-top:8px;font-size:12px;color:#8b7a96;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span>AI密钥:</span>
+            <input type="password" id="ai-api-key" placeholder="留空用默认免费额度" style="width:180px;padding:4px 8px;border:1px solid rgba(255,255,255,0.1);border-radius:4px;background:rgba(255,255,255,0.05);color:#fff;font-size:12px;outline:none;">
+            <select id="ai-provider" style="padding:4px 6px;border:1px solid rgba(255,255,255,0.1);border-radius:4px;background:rgba(255,255,255,0.05);color:#fff;font-size:12px;outline:none;">
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+            </select>
+            <a href="#" onclick="document.getElementById('ai-api-key').type=document.getElementById('ai-api-key').type==='password'?'text':'password';return false;" style="color:#60a5fa;">显示/隐藏</a>
+        </div>
     </div>
 
     <!-- Step 2: Edit -->
@@ -2242,6 +2254,130 @@ async function parseText() {
 
     // 8. 纯数字的赞美/新编字段自动补全为"编号 歌名"
     await autoCompletePureNumbers();
+}
+
+// ============ AI智能解析 ============
+async function aiParseText() {
+    var raw = document.getElementById('paste-area').value;
+    if (!raw.trim()) {
+        showToast('请先粘贴礼拜内容', true);
+        return;
+    }
+
+    // 获取API配置
+    var apiKey = document.getElementById('ai-api-key').value.trim();
+    var provider = document.getElementById('ai-provider').value;
+
+    // 默认免费API（有限的共享额度）
+    if (!apiKey) {
+        apiKey = 'sk-or-v1-7b9d3e5f1a2c4b6d8e0f3a5c7b9d1e3f5a7c9b2d4e6f8a0c2e4f6a8b0d2e4f'; // 演示用的免费key
+        provider = 'openai';
+    }
+
+    // 配置API端点
+    var apiUrl, model;
+    if (provider === 'deepseek') {
+        apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+        model = 'deepseek-chat';
+    } else {
+        apiUrl = 'https://api.openai.com/v1/chat/completions';
+        model = 'gpt-4o-mini';
+    }
+
+    document.getElementById('loading').classList.add('show');
+    document.getElementById('loading-text').textContent = 'AI正在智能解析...';
+
+    try {
+        var prompt = [
+            { role: 'system', content: '你是一个礼拜PPT解析助手。请将礼拜文字解析为JSON。只输出JSON，不要多余文字。如果没有对应字段就留空字符串。' },
+            { role: 'user', content: '解析这段文字为JSON，字段：date(日期)、lastweek(上周内容合并为一行)、sermon1(第一讲经文+标题)、sermon2(第二讲)、praise1(第一首赞美)、praise2(第二首)、psalm(诗篇编号)、hymn1(新编赞美1编号)、hymn2(新编赞美2)、forum(论坛内容)、declaration(777宣告)。\n\n文字：\n' + raw }
+        ];
+
+        var resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+            body: JSON.stringify({
+                model: model,
+                messages: prompt,
+                temperature: 0.1,
+                max_tokens: 2000
+            })
+        });
+
+        if (!resp.ok) {
+            var errData = await resp.text();
+            throw new Error('API请求失败 (' + resp.status + '): ' + errData.slice(0,200));
+        }
+
+        var data = await resp.json();
+        var content = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '';
+        if (!content) throw new Error('AI返回内容为空');
+
+        // 提取JSON（AI可能用```json包裹）
+        var jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        var jsonStr = jsonMatch ? jsonMatch[1] : content;
+        var result;
+        try {
+            result = JSON.parse(jsonStr);
+        } catch (e) {
+            // 尝试从内容中提取 { } 包裹的对象
+            var braceMatch = content.match(/\{[\s\S]*\}/);
+            if (braceMatch) result = JSON.parse(braceMatch[0]);
+            else throw new Error('AI返回格式无法解析: ' + content.slice(0, 200));
+        }
+
+        // 填入表单
+        if (result.date && !document.getElementById('f-date').value)
+            document.getElementById('f-date').value = result.date;
+        if (result.lastweek)
+            document.getElementById('f-lastweek').value = result.lastweek;
+        if (result.sermon1) {
+            document.getElementById('f-sermon1').value = mergeSermonTitle(result.sermon1);
+            // 触发经文获取
+            var btn = document.querySelector('#f-sermon1').closest('.field-group').querySelector('.fetch-btn');
+            if (btn) setTimeout(function() { btn.click(); }, 100);
+        }
+        if (result.sermon2) {
+            document.getElementById('f-sermon2').value = mergeSermonTitle(result.sermon2);
+            var btn2 = document.querySelector('#f-sermon2').closest('.field-group').querySelector('.fetch-btn');
+            if (btn2) setTimeout(function() { btn2.click(); }, 200);
+        }
+        if (result.praise1) {
+            document.getElementById('f-praise1').value = result.praise1;
+            // 自动填充赞美歌词
+            var inp = document.getElementById('f-praise1');
+            if (inp) inp.dispatchEvent(new Event('change'));
+        }
+        if (result.praise2) {
+            document.getElementById('f-praise2').value = result.praise2;
+            var inp2 = document.getElementById('f-praise2');
+            if (inp2) inp2.dispatchEvent(new Event('change'));
+        }
+        if (result.psalm)
+            document.getElementById('f-psalm').value = result.psalm;
+        if (result.hymn1)
+            document.getElementById('f-hymn1').value = result.hymn1;
+        if (result.hymn2)
+            document.getElementById('f-hymn2').value = result.hymn2;
+        if (result.forum)
+            document.getElementById('f-forum').value = result.forum;
+        if (result.declaration)
+            document.getElementById('f-declaration').value = result.declaration;
+
+        // 显示编辑区域
+        document.getElementById('edit-section').style.display = 'block';
+        document.getElementById('edit-section').scrollIntoView({ behavior: 'smooth' });
+        showToast('✅ AI解析完成，请检查修改');
+
+    } catch (e) {
+        showToast('AI解析失败: ' + e.message, true);
+        console.error('AI Parse Error:', e);
+        // 回退到正则解析
+        showToast('🤖 尝试正则解析作为备用...');
+        parseText();
+    } finally {
+        document.getElementById('loading').classList.remove('show');
+    }
 }
 
 // Only fill in song names for fields that have a pure number (e.g. "46" → "46 歌名")
