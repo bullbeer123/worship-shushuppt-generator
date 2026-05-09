@@ -3879,6 +3879,31 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // 检测浏览器内置AI，更新首页徽章
     updateAIBadge();
+
+    // ★ 自动保存：编辑区任何字段变化都保存（防丢失、周日可直接恢复）
+    var autoSaveTimer = null;
+    var autoSaveFields = ['f-date','f-lastweek','f-praise1','f-praise1-lyrics','f-praise2','f-praise2-lyrics','f-special','f-special-lyrics','f-psalm','f-psalm-content','f-hymn1','f-hymn1-lyrics','f-hymn2','f-hymn2-lyrics','f-sermon1','f-sermon2','f-forum','f-declaration'];
+    autoSaveFields.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', function() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(function() {
+                var data = collectSlideData();
+                saveRecord(data);
+                console.log('💾 自动保存');
+            }, 2000); // 输入停止2秒后保存，避免频繁写入
+        });
+    });
+
+    // ★ 周日自动恢复：如果有保存记录且表单为空，自动恢复
+    setTimeout(function() {
+        try {
+            var raw = localStorage.getItem(RECORD_KEY);
+            if (!raw) return;
+            if (document.getElementById('f-date').value) return; // 已有数据不覆盖
+            restoreLastRecord();
+        } catch (e) {}
+    }, 500);
 });
 
 // 首页AI状态徽章（一直显示，让用户清楚AI是否可用）
