@@ -1151,7 +1151,7 @@
         </div>
         <textarea class="paste-area" id="paste-area" placeholder="把手机备忘录里的文字直接粘贴到这里...&#10;&#10;格式示例：&#10;Sunday worship 2026.4.12&#10;题目&#10;撒上16:1-13要拯救世界的圣殿的开始&#10;创4:16-16、5:1-32血统&#10;赞美:76人生理由，131望楼的祷告&#10;诗篇:23篇&#10;论坛(提问):&#10;大卫因没有圣殿而哭，我在为什么哭?&#10;777的祷告-绝对望楼"></textarea>
         <div class="paste-hint">
-            💡 粘贴文字后，点右侧「📋 一键匹配」自动完成所有操作
+            💡 粘贴文字后，点下方「✨ 解析内容」自动填写
         </div>
         <button class="example-toggle" onclick="document.getElementById('example-box').classList.toggle('show')">
             ▸ 查看完整格式示例
@@ -1173,6 +1173,9 @@
         <button class="btn-parse" onclick="parseText()">
             ✨ 解析内容
         </button>
+        <div class="paste-hint" style="margin-top:4px;">
+            解析异常？用电脑版 <b>Chrome</b> 或 <b>Edge</b> 浏览器打开，可启用AI智能解析，识别更准
+        </div>
     </div>
 
     <!-- Step 2: Edit -->
@@ -2093,9 +2096,9 @@ async function parseText() {
     if (dateMatch) date = dateMatch[1] + '.' + dateMatch[2] + '.' + dateMatch[3];
     document.getElementById('f-date').value = date;
 
-    // 1.5 上周内容: "上周:xxxx" — 终止于下一节关键字（圣经书卷/赞美/诗篇/论坛等）
-    const sectionEndRx = /(?=创|出|利|民|申|书|士|得|撒上|撒下|王上|王下|代上|代下|拉|尼|斯|伯|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启|赞美|诗篇|新编|论坛|题目)/;
-    const lastweekAll = raw.match(/上周\s*[：:]\s*([\s\S]*?)(?=创|出|利|民|申|书|士|得|撒上|撒下|王上|王下|代上|代下|拉|尼|斯|伯|箴|传|歌|赛|耶|哀|结|但|何|珥|摩|俄|拿|弥|鸿|哈|番|该|亚|玛|太|可|路|约|徒|罗|林前|林后|加|弗|腓|西|帖前|帖后|提前|提后|多|门|来|雅|彼前|彼后|约一|约贰|约叁|犹|启|赞美|诗篇|新编|论坛|题目)/m);
+    // 1.5 上周内容: "上周:xxxx" — 终止于下一节关键字（圣经书卷+数字/赞美/诗篇/论坛等）
+    //    注意：圣经书卷名后必须跟数字（如"拿1:1"），避免"拿着"中的"拿"误触发
+    const lastweekAll = raw.match(/上周\s*[：:]\s*([\s\S]*?)(?=创\d|出\d|利\d|民\d|申\d|书\d|士\d|得\d|撒上\d|撒下\d|王上\d|王下\d|代上\d|代下\d|拉\d|尼\d|斯\d|伯\d|箴\d|传\d|歌\d|赛\d|耶\d|哀\d|结\d|但\d|何\d|珥\d|摩\d|俄\d|拿\d|弥\d|鸿\d|哈\d|番\d|该\d|亚\d|玛\d|太\d|可\d|路\d|约\d|徒\d|罗\d|林前\d|林后\d|加\d|弗\d|腓\d|西\d|帖前\d|帖后\d|提前\d|提后\d|多\d|门\d|来\d|雅\d|彼前\d|彼后\d|约一\d|约贰\d|约叁\d|犹\d|启\d|赞美|诗篇|新编|论坛|题目)/m);
     if (lastweekAll) {
         const text = lastweekAll[1].replace(/\s+/g, '').replace(/[（(]/g, '（').replace(/[）)]/g, '）').replace(/[:：]/g, '：');
         document.getElementById('f-lastweek').value = text;
